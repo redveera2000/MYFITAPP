@@ -1,0 +1,23 @@
+version: "3.9"
+
+services:
+  vtrack:
+    build: .
+    image: vtrack-app:latest
+    container_name: vtrack-app
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp

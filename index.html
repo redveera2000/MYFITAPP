@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AESTHETIX // Premium Workout Tracker & Progressive Overload Engine</title>
+  <meta name="description" content="Personalized fitness tracker and progressive overload assistant for Veeradinesh's 6-day workout split, optimized for strength training and body composition.">
+  <link rel="stylesheet" href="index.css">
+  <!-- Chart.js for data visualization -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <!-- Premium Header -->
+    <header class="app-header">
+      <div class="brand-wrapper">
+        <div class="brand-logo">Aesthetix</div>
+        <div>
+          <span class="brand-subtitle">V-Track Engine v1.0</span>
+        </div>
+      </div>
+      <div class="user-quick-profile">
+        <div class="user-avatar">V</div>
+        <div class="user-info-text">
+          User: <strong>Veeradinesh</strong>
+        </div>
+      </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="navigation-bar">
+      <button class="tab-btn active" data-tab="dashboard-tab">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z"/></svg>
+        <span class="tab-txt-desktop">Dashboard & Analytics</span>
+        <span class="tab-txt-mobile">Dashboard</span>
+      </button>
+      <button class="tab-btn" data-tab="tracker-tab">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+        <span class="tab-txt-desktop">Track Workout</span>
+        <span class="tab-txt-mobile">Track</span>
+      </button>
+      <button class="tab-btn" data-tab="plan-tab">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+        <span class="tab-txt-desktop">Routine & Progression</span>
+        <span class="tab-txt-mobile">Routine</span>
+      </button>
+      <button class="tab-btn" data-tab="profile-tab">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+        <span class="tab-txt-desktop">Nutrition & Settings</span>
+        <span class="tab-txt-mobile">Settings</span>
+      </button>
+    </nav>
+
+    <main>
+      
+      <!-- 1. DASHBOARD TAB -->
+      <section id="dashboard-tab" class="tab-content active">
+        <h2 class="tab-section-title">Performance Summary</h2>
+        
+        <!-- Summary Cards Grid -->
+        <div class="grid-3col" style="margin-bottom: 24px;">
+          <div class="glass-panel stat-widget-box">
+            <span class="stat-box-lbl">Current Weight</span>
+            <span class="stat-box-num glow-txt" id="dash-weight">112.8 kg</span>
+            <span style="font-size: 11px; margin-top: 5px; color: var(--text-muted);">Height: 175cm | Target: ~85kg</span>
+          </div>
+          <div class="glass-panel stat-widget-box">
+            <span class="stat-box-lbl">Daily Energy Target</span>
+            <span class="stat-box-num glow-txt" id="dash-calories">2,415 kcal</span>
+            <span style="font-size: 11px; margin-top: 5px; color: var(--text-muted);">Deficit: 700 kcal applied</span>
+          </div>
+          <div class="glass-panel stat-widget-box">
+            <span class="stat-box-lbl">Body Mass Index (BMI)</span>
+            <span class="stat-box-num glow-txt">36.8</span>
+            <span style="font-size: 11px; margin-top: 5px; color: var(--danger-color);">Obese Class II</span>
+          </div>
+        </div>
+
+        <div class="dashboard-layout">
+          <!-- Left Column: Quick Weight Logger -->
+          <div class="glass-panel">
+            <h3 class="widget-title">Log Daily Weight</h3>
+            <p style="font-size: 12.5px; color: var(--text-secondary); margin-bottom: 15px; line-height: 1.4;">
+              Track your morning weight consistently to calibrate BMR and monitor long-term fat loss trends.
+            </p>
+            <div class="form-group">
+              <label for="log-w-val">Weight Value (kg)</label>
+              <input type="number" step="0.1" id="log-w-val" class="form-control" placeholder="e.g. 112.5">
+            </div>
+            <div class="form-group">
+              <label for="log-w-date">Log Date</label>
+              <input type="date" id="log-w-date" class="form-control">
+            </div>
+            <button id="log-w-submit" class="btn">Log Weight</button>
+          </div>
+
+          <!-- Right Column: Graphs -->
+          <div class="glass-panel">
+            <h3 class="widget-title">Fat Loss Progress & Trends</h3>
+            <div class="chart-container">
+              <canvas id="weight-loss-chart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 2: Volume Index and Progression Analysis -->
+        <div class="glass-panel" style="margin-top: 24px;">
+          <h3 class="widget-title">Progressive Overload Volume (Last 8 Sessions)</h3>
+          <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 15px; line-height: 1.4;">
+            Total Volume Index = Weight × Reps logged for all sets. A steady upward trend demonstrates active progressive overload, proving that your muscles are adapting and growing stronger despite being in a caloric deficit.
+          </p>
+          <div class="chart-container" style="height: 250px;">
+            <canvas id="volume-index-chart"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. TRACKER TAB -->
+      <section id="tracker-tab" class="tab-content">
+        <h2 class="tab-section-title">Active Workout Logger</h2>
+        
+        <div class="glass-panel" style="margin-bottom: 24px;">
+          <div class="log-setup-row">
+            <div class="setup-col">
+              <label for="workout-select" style="font-weight:600; color: var(--accent-primary);">Workout Session:</label>
+              <select id="workout-select" class="form-control" style="width: auto;"></select>
+            </div>
+            <div class="setup-col">
+              <label for="workout-date" style="font-weight:600; color: var(--accent-primary);">Date:</label>
+              <input type="date" id="workout-date" class="form-control" style="width: auto;">
+            </div>
+          </div>
+          <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 5px;">
+            Input the weights and reps you perform for each set. The system suggests baseline weights calculated from your previous workouts using progressive overload logic.
+          </p>
+        </div>
+
+        <!-- Exercises List Container -->
+        <div id="workout-exercises-container" class="exercises-log-grid">
+          <!-- Populated dynamically via app.js -->
+        </div>
+
+        <div style="display: flex; justify-content: flex-end;">
+          <button id="save-workout-btn" class="btn" style="max-width: 250px; font-size: 16px; padding: 15px;">
+            Save & Check Progression
+          </button>
+        </div>
+      </section>
+
+      <!-- 3. PLAN & ROUTINE TAB -->
+      <section id="plan-tab" class="tab-content">
+        <h2 class="tab-section-title">Workout Program & Baselines</h2>
+        
+        <!-- Scientific Instructions -->
+        <div class="glass-panel" style="margin-bottom: 24px;">
+          <h3 class="widget-title">Progressive Overload Rules & Guidelines</h3>
+          <div class="research-tips-list">
+            <div class="research-tip-box">
+              <h4>1. Double Progression Model</h4>
+              <p>
+                Each exercise lists a target **Rep Range** (e.g., 8-12 reps). Choose a starting weight. If you can perform the top of the range (12 reps) for **all** sets, the application will automatically increase the weight by 2.5 kg (or 5 kg for compound barbell exercises) next week, and drop your target reps to the bottom of the range (8). Work your way up in reps before adding weight again.
+              </p>
+            </div>
+            <div class="research-tip-box">
+              <h4>2. Injury Prevention & Safety Deloads</h4>
+              <p>
+                Because you are carrying 112.8 kg, your joints and connective tissue undergo high mechanical stress. If your reps drop below the minimum limit (e.g. less than 8 reps) on any set, the system automatically triggers a **10% deload** for the next session. This resets muscle fatigue, ensures flawless execution form, and allows joint recovery.
+              </p>
+            </div>
+            <div class="research-tip-box">
+              <h4>3. Custom Baseline Adjustments</h4>
+              <p>
+                Below is a list of your current tracking targets. You can edit the target weights directly in the boxes below if you want to manually set a custom starting point for your first week.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dynamic Plan List -->
+        <div id="plan-overview-container">
+          <!-- Populated dynamically via app.js -->
+        </div>
+      </section>
+
+      <!-- 4. PROFILE & NUTRITION TAB -->
+      <section id="profile-tab" class="tab-content">
+        <h2 class="tab-section-title">Nutrition Planner & User Settings</h2>
+
+        <div class="dashboard-layout">
+          <!-- User Profile Settings Form -->
+          <div class="glass-panel">
+            <h3 class="widget-title">Physical Profile</h3>
+            
+            <div class="form-group">
+              <label for="prof-age">Age (years)</label>
+              <input type="number" id="prof-age" class="form-control" value="28">
+            </div>
+            <div class="form-row" style="display: flex; gap: 15px;">
+              <div class="form-group" style="flex: 1;">
+                <label for="prof-height">Height (cm)</label>
+                <input type="number" id="prof-height" class="form-control" value="175">
+              </div>
+              <div class="form-group" style="flex: 1;">
+                <label for="prof-weight">Weight (kg)</label>
+                <input type="number" step="0.1" id="prof-weight" class="form-control" value="112.8">
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="prof-activity">Weekly Activity Level</label>
+              <select id="prof-activity" class="form-control">
+                <option value="1.2">Sedentary (desk job, 0 training)</option>
+                <option value="1.375">Lightly Active (1-3 days training)</option>
+                <option value="1.5" selected>Moderately Active (6 days strength splits)</option>
+                <option value="1.725">Very Active (heavy physical training / athletic)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="prof-deficit">Fat Loss Deficit (kcal/day)</label>
+              <input type="number" id="prof-deficit" class="form-control" value="700" step="50">
+            </div>
+
+            <!-- Export / Import Section -->
+            <div style="margin-top: 30px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 20px;">
+              <h3 class="widget-title" style="font-size: 15px;">Data Synchronization</h3>
+              <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 12px;">
+                Backup your local training logs to a file or migrate it to another device.
+              </p>
+              <div class="backup-buttons">
+                <button onclick="exportData()" class="btn btn-secondary">Export JSON</button>
+                <div class="import-wrapper">
+                  <button class="btn btn-secondary">Import JSON</button>
+                  <input type="file" id="import-file-input" onchange="importData(event)">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Nutritional Targets Output Panel -->
+          <div class="glass-panel nutrition-stats-card">
+            <h3 class="widget-title">Target Fat Loss Macronutrients</h3>
+            
+            <div class="calorie-target-display">
+              <h4>Caloric Deficit Limit</h4>
+              <div class="calorie-target-number" id="calc-calories">2,415</div>
+              <span class="calorie-sub">kcal / day recommended for fat loss</span>
+            </div>
+
+            <div class="metabolism-grid">
+              <div class="met-box">
+                <span>Basal Metabolic Rate</span>
+                <strong id="calc-bmr">2,077 kcal</strong>
+              </div>
+              <div class="met-box">
+                <span>Active TDEE</span>
+                <strong id="calc-tdee">3,115 kcal</strong>
+              </div>
+            </div>
+
+            <div class="macro-progress-list">
+              <!-- Protein -->
+              <div class="macro-row">
+                <div class="macro-labels">
+                  <span class="macro-name">Protein (Lean Mass Preservation)</span>
+                  <span class="macro-grams" id="macro-protein">180g</span>
+                </div>
+                <div class="macro-bar-container">
+                  <div id="pct-protein" class="macro-fill"></div>
+                </div>
+                <span style="font-size: 11px; color: var(--text-muted);">Sparing muscle and enhancing satiety.</span>
+              </div>
+              
+              <!-- Carbs -->
+              <div class="macro-row">
+                <div class="macro-labels">
+                  <span class="macro-name">Carbohydrates (Performance Fuel)</span>
+                  <span class="macro-grams" id="macro-carbs">223g</span>
+                </div>
+                <div class="macro-bar-container">
+                  <div id="pct-carbs" class="macro-fill"></div>
+                </div>
+                <span style="font-size: 11px; color: var(--text-muted);">Fuels high intensity strength training.</span>
+              </div>
+
+              <!-- Fats -->
+              <div class="macro-row">
+                <div class="macro-labels">
+                  <span class="macro-name">Fats (Hormonal Regulation)</span>
+                  <span class="macro-grams" id="macro-fats">67g</span>
+                </div>
+                <div class="macro-bar-container">
+                  <div id="pct-fats" class="macro-fill"></div>
+                </div>
+                <span style="font-size: 11px; color: var(--text-muted);">Essential for cellular health and recovery.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Google Sheets Sync & CSV Export Panel -->
+        <div class="glass-panel" style="margin-top: 24px;">
+          <h3 class="widget-title">Google Sheets Sync Integration</h3>
+          <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 15px; line-height: 1.5;">
+            Keep your training logs synchronized to a personal Google Sheet automatically. Setting it up takes less than 2 minutes:
+          </p>
+          
+          <div class="grid-2col" style="margin-bottom: 5px; align-items: start;">
+            <div>
+              <h4 style="font-size: 14px; color: var(--accent-primary); margin-bottom: 8px;">1. Set Up Apps Script</h4>
+              <ol style="font-size: 12.5px; color: var(--text-secondary); margin-left: 20px; line-height: 1.6; margin-bottom: 15px;">
+                <li>Create a new Google Sheet.</li>
+                <li>Go to <strong>Extensions &gt; Apps Script</strong>.</li>
+                <li>Clear any template code, paste the script on the right, and click <strong>Save</strong>.</li>
+                <li>Click <strong>Deploy &gt; New Deployment</strong>. Select <strong>Web App</strong>.</li>
+                <li>Under access, select <strong>"Anyone"</strong>, click deploy, and authorize permissions.</li>
+                <li>Copy the generated <strong>Web App URL</strong>.</li>
+              </ol>
+              
+              <h4 style="font-size: 14px; color: var(--accent-primary); margin-bottom: 8px;">2. Paste Gateway URL</h4>
+              <div class="form-group">
+                <label for="pref-sheets-url">Google Sheets Web App URL</label>
+                <input type="text" id="pref-sheets-url" class="form-control" placeholder="https://script.google.com/macros/s/.../exec">
+              </div>
+
+              <div class="form-group" style="margin-top: 15px;">
+                <button onclick="copyHistoryAsCSV()" class="btn btn-secondary">Copy Full History as CSV</button>
+              </div>
+            </div>
+            
+            <div>
+              <h4 style="font-size: 14px; color: var(--accent-primary); margin-bottom: 8px;">Apps Script Code:</h4>
+              <div style="position: relative;">
+                <pre style="background: rgba(11, 12, 16, 0.7); border: 1px solid var(--panel-border); padding: 12px; border-radius: 8px; font-family: monospace; font-size: 11px; overflow-x: auto; color: var(--accent-primary); max-height: 250px;"><code id="apps-script-code">function doPost(e) {
+  try {
+    var data = JSON.parse(e.postData.contents);
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    if (sheet.getLastRow() === 0) {
+      sheet.appendRow(["Date", "Workout Name", "Exercise Name", "Set Number", "Weight (kg)", "Reps"]);
+    }
+    data.exercises.forEach(function(ex) {
+      ex.sets.forEach(function(set, idx) {
+        if (set.reps !== null && set.reps !== undefined) {
+          sheet.appendRow([data.date, data.workoutName, ex.name, idx + 1, set.weight, set.reps]);
+        }
+      });
+    });
+    return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
+  } catch(error) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: error.toString() })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+function doGet() {
+  return ContentService.createTextOutput("Aesthetix Sync Gateway is Active!");
+}</code></pre>
+                <button onclick="copyAppsScriptCode()" style="position: absolute; right: 10px; top: 10px; background: rgba(31, 40, 51, 0.9); border: 1px solid var(--accent-secondary); color: var(--accent-primary); border-radius: 4px; padding: 4px 8px; font-size: 10px; cursor: pointer; font-family: var(--font-display); font-weight:600;">Copy Code</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- History Records List -->
+        <div class="glass-panel" style="margin-top: 24px;">
+          <h3 class="widget-title">Training History Logs</h3>
+          <div id="history-records-container" class="history-records-list">
+            <!-- Populated dynamically via app.js -->
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Progressive Overload Suggestion Modal -->
+  <div id="overload-report-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Overload Recommendation</h3>
+        <button id="modal-close-btn" class="delete-history-btn" style="font-size: 24px;">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 13.5px; color: var(--text-secondary); margin-bottom: 20px; line-height: 1.4;">
+          We analyzed your logged sets. Below are the progressive overload calculations for your next session:
+        </p>
+        <ul id="overload-report-list" class="overload-report-list">
+          <!-- Loaded dynamically on save -->
+        </ul>
+      </div>
+      <div class="modal-footer">
+        <button onclick="document.getElementById('overload-report-modal').classList.remove('show')" class="btn" style="max-width: 120px;">Got it!</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Link App Script -->
+  <script src="app.js"></script>
+</body>
+</html>
