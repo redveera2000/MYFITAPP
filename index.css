@@ -587,17 +587,28 @@ select.form-control {
   width: 90px;
 }
 
+.set-inputs .input-wrapper:nth-child(2) {
+  width: 96px; /* wider to accommodate "reps" unit */
+}
+
 .input-wrapper input {
   width: 100%;
   background: rgba(31, 40, 51, 0.8);
   border: 1px solid var(--panel-border);
   color: var(--text-primary);
   border-radius: 6px;
-  padding: 6px 24px 6px 8px;
   font-size: 13px;
   font-weight: 600;
   text-align: right;
   outline: none;
+}
+
+.input-wrapper input.set-weight-input {
+  padding: 6px 24px 6px 8px;
+}
+
+.input-wrapper input.set-reps-input {
+  padding: 6px 36px 6px 8px;
 }
 
 .input-wrapper input:focus {
@@ -1149,9 +1160,20 @@ select.form-control {
     width: 80px;
   }
 
+  .set-inputs .input-wrapper:nth-child(2) {
+    width: 88px; /* wider to accommodate "reps" unit on mobile */
+  }
+
   .input-wrapper input {
     font-size: 12.5px;
-    padding: 5px 20px 5px 6px;
+  }
+
+  .input-wrapper input.set-weight-input {
+    padding: 5px 22px 5px 6px;
+  }
+
+  .input-wrapper input.set-reps-input {
+    padding: 5px 34px 5px 6px;
   }
   
   .target-badge {
