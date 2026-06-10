@@ -128,7 +128,7 @@ async function initFirebase() {
 function getAuthorizedEmail() {
   let email = singleUserConfig.email;
   if (!email || email === "" || email.startsWith("${")) {
-    return "singleuser@vtrack.app";
+    return "veeradinesh219@gmail.com";
   }
   return email.trim().toLowerCase();
 }
@@ -141,8 +141,7 @@ async function signInUser(email, password) {
   const inputEmail = email.trim().toLowerCase();
 
   if (inputEmail !== authorized) {
-    console.error(`[Auth] Email mismatch. Input: "${inputEmail}", Authorized: "${authorized}"`);
-    const error = new Error(`Access denied. Email is not authorized. Expected: "${authorized}"`);
+    const error = new Error("Access denied. Email address is not authorized for this application.");
     error.code = "auth/access-denied";
     throw error;
   }
@@ -158,8 +157,7 @@ async function registerUser(email, password) {
   const inputEmail = email.trim().toLowerCase();
 
   if (inputEmail !== authorized) {
-    console.error(`[Auth] Registration email mismatch. Input: "${inputEmail}", Authorized: "${authorized}"`);
-    const error = new Error(`Registration restricted. Expected authorized email: "${authorized}"`);
+    const error = new Error("Registration is restricted to the authorized administrator email only.");
     error.code = "auth/registration-restricted";
     throw error;
   }

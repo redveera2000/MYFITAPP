@@ -4,6 +4,15 @@ All notable changes to the AESTHETIX V-TRACK fitness tracker will be documented 
 
 ---
 
+## [1.5.2] - 2026-06-10
+### Fixed
+- **🔒 Secured Auth Error Outputs**: Removed expected authorized email details from console logs and user interface error screens to prevent unauthorized email leaks.
+- **⚙️ Updated Default Authorized User**: Changed the default authorized single-user email configuration and fallback to `[EMAIL_ADDRESS]`.
+- **index.html updated**: Bumped version tag to `1.5.2` for browser cache busting.
+- **docker-compose.yml updated**: Bumped image tag and default fallback to `1.5.2`.
+
+---
+
 ## [1.5.1] - 2026-06-10
 ### Fixed
 - **🔍 Improved Auth Error Transparency**: Updated login error messages to output the expected authorized email if an "Access Denied" or "Registration Restricted" check triggers. This ensures easy debugging of host environment configuration mismatches.
