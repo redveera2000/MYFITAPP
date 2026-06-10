@@ -18,7 +18,7 @@
       <div class="brand-wrapper">
         <div class="brand-logo">Aesthetix</div>
         <div>
-          <span class="brand-subtitle">V-Track Engine v1.0</span>
+          <span class="brand-subtitle" id="version-badge" style="cursor: pointer; background: rgba(102, 252, 241, 0.1); border: 1px solid rgba(102, 252, 241, 0.3); padding: 2px 8px; border-radius: 4px; color: var(--accent-primary); font-size: 10.5px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;" onclick="showReleaseNotesModal()">v1.2.0</span>
         </div>
       </div>
       <div class="user-quick-profile">
@@ -381,6 +381,19 @@ function doGet() {
             </div>
           </div>
         </div>
+
+        <!-- Version Info & Release Notes Panel -->
+        <div class="glass-panel" style="margin-top: 24px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+            <div>
+              <h3 class="widget-title" style="margin-bottom: 5px;">Application Info</h3>
+              <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 0;">
+                Current Version: <strong class="glow-txt" style="color: var(--accent-primary);">v1.2.0</strong>
+              </p>
+            </div>
+            <button onclick="showReleaseNotesModal()" class="btn" style="max-width: 180px; font-size: 13.5px; padding: 10px 20px;">View Release Notes</button>
+          </div>
+        </div>
       </section>
 
     </main>
@@ -403,6 +416,60 @@ function doGet() {
       </div>
       <div class="modal-footer">
         <button onclick="document.getElementById('overload-report-modal').classList.remove('show')" class="btn" style="max-width: 120px;">Got it!</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Release Notes Modal -->
+  <div id="release-notes-modal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 600px;">
+      <div class="modal-header">
+        <h3>Release Notes & Version History</h3>
+        <button onclick="document.getElementById('release-notes-modal').classList.remove('show')" class="delete-history-btn" style="font-size: 24px;">&times;</button>
+      </div>
+      <div class="modal-body" style="line-height: 1.6; max-height: 60vh;">
+        <div class="release-version-section" style="margin-bottom: 24px;">
+          <h4 style="color: var(--accent-primary); font-size: 15px; margin-bottom: 8px; border-bottom: 1px dashed rgba(102, 252, 241, 0.2); padding-bottom: 6px; font-family: var(--font-display); font-weight: 700; display: flex; justify-content: space-between; align-items: center;">
+            <span>v1.2.0 (June 10, 2026)</span>
+            <span style="font-size: 10px; background: rgba(102, 252, 241, 0.15); border: 1px solid rgba(102, 252, 241, 0.3); padding: 1px 6px; border-radius: 12px; color: var(--accent-primary);">CURRENT</span>
+          </h4>
+          <ul style="font-size: 12.5px; color: var(--text-secondary); margin-left: 20px; list-style-type: disc; padding-left: 0;">
+            <li style="margin-bottom: 6px;"><strong>Manually Entered Weight Baseline:</strong> Corrected progressive overload calculations to use user-entered manual weights instead of default baseline suggestions.</li>
+            <li style="margin-bottom: 6px;"><strong>Card-Level Exercise Saving:</strong> Replaced global logs submission with individual "Save Exercise" actions to prevent accidental entries.</li>
+            <li style="margin-bottom: 6px;"><strong>Card Locking & Re-editing:</strong> Saved cards lock inputs, show green borders, and can be edited/unlocked via confirmation prompts.</li>
+            <li style="margin-bottom: 6px;"><strong>Isolated History Database:</strong> Extracted workout history records from Settings into a dedicated main navigation tab.</li>
+            <li style="margin-bottom: 6px;"><strong>Timezone & Weekday Automation:</strong> Standardized logging dates to local timezone calendar date rather than UTC date offset, and added automatic weekday tags.</li>
+          </ul>
+        </div>
+        
+        <div class="release-version-section" style="margin-bottom: 24px;">
+          <h4 style="color: var(--accent-secondary); font-size: 15px; margin-bottom: 8px; border-bottom: 1px dashed rgba(69, 162, 158, 0.2); padding-bottom: 6px; font-family: var(--font-display); font-weight: 700;">
+            v1.1.0 (June 6, 2026)
+          </h4>
+          <ul style="font-size: 12.5px; color: var(--text-secondary); margin-left: 20px; list-style-type: disc; padding-left: 0;">
+            <li style="margin-bottom: 6px;"><strong>Docker Deployment:</strong> Containerized setup using Nginx 1.27 Alpine for static file delivery.</li>
+            <li style="margin-bottom: 6px;"><strong>Security Customizations:</strong> Added secure response headers, compression, caching policies, and CSP rules.</li>
+            <li style="margin-bottom: 6px;"><strong>GitHub Actions CI/CD:</strong> Configured workflows to automatically execute deployments on push.</li>
+            <li style="margin-bottom: 6px;"><strong>Responsive Styling Refinements:</strong> Fixed layout text overlaps and unit label alignment on mobile viewports.</li>
+          </ul>
+        </div>
+
+        <div class="release-version-section">
+          <h4 style="color: var(--text-muted); font-size: 15px; margin-bottom: 8px; border-bottom: 1px dashed rgba(255, 255, 255, 0.1); padding-bottom: 6px; font-family: var(--font-display); font-weight: 700;">
+            v1.0.0 (June 6, 2026)
+          </h4>
+          <ul style="font-size: 12.5px; color: var(--text-secondary); margin-left: 20px; list-style-type: disc; padding-left: 0;">
+            <li style="margin-bottom: 6px;"><strong>Mifflin-St Jeor TDEE Engine:</strong> Built user energy maintenance and macro target splits generator.</li>
+            <li style="margin-bottom: 6px;"><strong>PPL Program Templates:</strong> Pre-programmed a flexible 6-day split routine.</li>
+            <li style="margin-bottom: 6px;"><strong>Progressive Overload Tracking:</strong> Programmed automatic weights adaptation rules.</li>
+            <li style="margin-bottom: 6px;"><strong>Local Browser Memory:</strong> Setup state management using `localStorage` persistence.</li>
+            <li style="margin-bottom: 6px;"><strong>Progress Charts:</strong> Implemented interactive weight curves and total training volume bar charts via Chart.js.</li>
+            <li style="margin-bottom: 6px;"><strong>Google Sheets Webhook Sync:</strong> Configured a post gateway to synchronize rows to personal spreadsheets.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button onclick="document.getElementById('release-notes-modal').classList.remove('show')" class="btn" style="max-width: 120px;">Close</button>
       </div>
     </div>
   </div>

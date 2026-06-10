@@ -967,6 +967,13 @@ function unlockSingleLift(btn) {
   }
 }
 
+function showReleaseNotesModal() {
+  const modal = document.getElementById("release-notes-modal");
+  if (modal) {
+    modal.classList.add("show");
+  }
+}
+
 function showOverloadModal(report) {
   const modal = document.getElementById("overload-report-modal");
   const reportList = document.getElementById("overload-report-list");
