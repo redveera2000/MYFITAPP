@@ -4,3 +4,6 @@
 .DS_Store
 *.md
 LICENSE
+.env
+*.env
+docker-compose.override.yml

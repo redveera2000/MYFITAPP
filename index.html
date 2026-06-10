@@ -6,6 +6,10 @@
   <title>AESTHETIX // Premium Workout Tracker & Progressive Overload Engine</title>
   <meta name="description" content="Personalized fitness tracker and progressive overload assistant for Veeradinesh's 6-day workout split, optimized for strength training and body composition.">
   <link rel="stylesheet" href="index.css">
+  <!-- Firebase SDK (CDN Compat - No bundler required) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <!-- Chart.js for data visualization -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -22,6 +26,10 @@
         </div>
       </div>
       <div class="user-quick-profile">
+        <div id="sync-status-indicator" class="sync-status" title="Cloud Sync Status">
+          <span class="sync-dot initializing"></span>
+          <span class="sync-label">Connecting...</span>
+        </div>
         <div class="user-avatar">V</div>
         <div class="user-info-text">
           User: <strong>Veeradinesh</strong>
@@ -410,6 +418,9 @@ function doGet() {
     </div>
   </div>
 
+  <!-- Firebase Configuration & Database Service -->
+  <script src="firebase-config.js"></script>
+  <script src="db-service.js"></script>
   <!-- Link App Script -->
   <script src="app.js"></script>
 </body>

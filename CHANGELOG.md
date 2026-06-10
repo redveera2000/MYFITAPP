@@ -4,6 +4,27 @@ All notable changes to the AESTHETIX V-TRACK fitness tracker will be documented 
 
 ---
 
+## [1.3.0] - 2026-06-10
+### Added
+- **🔥 Firebase Firestore Integration**: Migrated data persistence from `localStorage` to Cloud Firestore (serverless NoSQL database). All workout history, exercise targets, weight logs, and profile data now persist in the cloud.
+- **☁️ Cloud Sync Status Indicator**: Added a real-time sync status indicator in the header bar showing connection state (`Cloud Synced` / `Syncing...` / `Local Only` / `Offline`).
+- **🔄 Automatic Data Migration**: First-time users with existing localStorage data get a seamless one-time migration to Firestore with zero data loss.
+- **📴 Offline Support**: Built-in Firestore offline persistence — the app works fully offline and auto-syncs when connectivity returns.
+- **🔒 Firebase Anonymous Auth**: Frictionless authentication with no login screen required. Data is user-scoped and secured via Firestore Security Rules.
+- **💾 Dual-Write Architecture**: All save operations write to both localStorage (fast cache) and Firestore (cloud persistence) for maximum reliability.
+- **🔑 Environment Variable Dynamic Injection**: Removed all hardcoded credentials from codebase and replaced them with placeholders injected dynamically from GitHub Secrets / Environment Variables at container startup.
+
+### Changed
+- **StateManager refactored**: Constructor now supports async Firebase initialization while maintaining synchronous localStorage loading for instant first paint.
+- **Docker image & Nginx updated**: Integrated an entrypoint template processor script (`configure-firebase.sh`), mapped variables in `docker-compose.yml`, and updated the Nginx Content Security Policy (CSP) to permit Firestore connections and script loads from `gstatic.com`.
+- **Docker image bumped**: Image tag updated to `1.3.0`.
+
+### Infrastructure
+- **New files**: `firebase-config.js` (Firebase SDK initialization), `db-service.js` (Firestore CRUD service layer).
+- **Firebase SDK**: Added Firebase v10 compat CDN scripts (App, Auth, Firestore) to `index.html`.
+
+---
+
 ## [1.2.2] - 2026-06-10
 ### Added
 - **Workout Status Badge**: Added a dynamic completion badge (`IN PROGRESS` / `COMPLETED ✓`) next to the Workout Session selector dropdown to indicate logging status.

@@ -78,7 +78,8 @@ const DEFAULT_PROGRAM = {
 class StateManager {
   constructor() {
     this.keyPrefix = "v_track_";
-    this.loadState();
+    this.firebaseInitialized = false;
+    this.loadState(); // Synchronous: loads from localStorage (fast initial render)
   }
 
   loadState() {
@@ -142,12 +143,150 @@ class StateManager {
     }
   }
 
+  /**
+   * Async initialization: Connect to Firebase, load cloud data, migrate if needed
+   * Called after DOMContentLoaded and initial synchronous load
+   */
+  async initAsync() {
+    // Check if Firebase is configured (not placeholder values)
+    if (typeof isFirebaseConfigured === 'function' && !isFirebaseConfigured()) {
+      console.log('[StateManager] Firebase not configured. Running in local-only mode.');
+      updateSyncStatusUI('local-only', 'Local Only');
+      return;
+    }
+
+    // Try to initialize Firebase
+    if (typeof initFirebase === 'function') {
+      try {
+        updateSyncStatusUI('initializing', 'Connecting...');
+        const uid = await initFirebase();
+
+        if (!uid) {
+          console.warn('[StateManager] Firebase init returned no UID. Running in local-only mode.');
+          updateSyncStatusUI('local-only', 'Local Only');
+          return;
+        }
+
+        // Initialize the Firestore service
+        if (typeof firestoreService !== 'undefined') {
+          firestoreService.init(getFirestoreDb(), uid);
+
+          // Register sync status listener
+          onSyncStatusChange((status) => {
+            const labels = {
+              'synced': 'Cloud Synced',
+              'syncing': 'Syncing...',
+              'offline': 'Offline',
+              'error': 'Sync Error',
+              'initializing': 'Connecting...'
+            };
+            updateSyncStatusUI(status, labels[status] || status);
+          });
+
+          // Check if we need to migrate localStorage data to Firestore
+          const hasCloud = await firestoreService.hasFirestoreData();
+          const migrationDone = await firestoreService.isMigrationDone();
+
+          if (!hasCloud && !migrationDone && this.hasLocalData()) {
+            console.log('[StateManager] First-time migration: uploading localStorage to Firestore...');
+            updateSyncStatusUI('syncing', 'Migrating...');
+            const success = await firestoreService.migrateFromLocalStorage({
+              profile: this.profile,
+              currentWeights: this.currentWeights,
+              history: this.history,
+              weightLogs: this.weightLogs
+            });
+            if (success) {
+              console.log('[StateManager] Migration complete!');
+              updateSyncStatusUI('synced', 'Cloud Synced');
+            }
+          } else if (hasCloud) {
+            // Load data from Firestore (cloud is source of truth)
+            console.log('[StateManager] Loading data from Firestore...');
+            updateSyncStatusUI('syncing', 'Loading...');
+            await this.loadFromFirestore();
+            updateSyncStatusUI('synced', 'Cloud Synced');
+          }
+
+          this.firebaseInitialized = true;
+          console.log('[StateManager] Firebase integration active.');
+        }
+      } catch (error) {
+        console.error('[StateManager] Firebase async init failed:', error);
+        updateSyncStatusUI('error', 'Sync Error');
+      }
+    } else {
+      updateSyncStatusUI('local-only', 'Local Only');
+    }
+  }
+
+  /**
+   * Load all data from Firestore and update local state + localStorage cache
+   */
+  async loadFromFirestore() {
+    if (!firestoreService || !firestoreService.isReady()) return;
+
+    try {
+      // Load profile
+      const cloudProfile = await firestoreService.loadProfile();
+      if (cloudProfile) {
+        this.profile = { ...this.profile, ...cloudProfile };
+        this.saveProfile();
+      }
+
+      // Load exercise targets
+      const cloudWeights = await firestoreService.loadExerciseTargets();
+      if (cloudWeights && Object.keys(cloudWeights).length > 0) {
+        this.currentWeights = { ...this.currentWeights, ...cloudWeights };
+        this.saveWeights();
+      }
+
+      // Load workout history
+      const cloudHistory = await firestoreService.loadWorkoutHistory();
+      if (cloudHistory && cloudHistory.length > 0) {
+        this.history = cloudHistory;
+        this.saveHistory();
+      }
+
+      // Load weight logs
+      const cloudWeightLogs = await firestoreService.loadWeightLogs();
+      if (cloudWeightLogs && cloudWeightLogs.length > 0) {
+        this.weightLogs = cloudWeightLogs;
+        this.saveWeightLogs();
+      }
+
+      console.log('[StateManager] All data loaded from Firestore.');
+
+      // Re-render UI with fresh cloud data
+      refreshAllUI();
+    } catch (error) {
+      console.error('[StateManager] Error loading from Firestore:', error);
+    }
+  }
+
+  /**
+   * Check if localStorage has any meaningful data worth migrating
+   */
+  hasLocalData() {
+    return (this.history && this.history.length > 0) ||
+           (this.weightLogs && this.weightLogs.length > 1) ||
+           (this.profile && this.profile.name);
+  }
+
   saveProfile() {
     localStorage.setItem(this.keyPrefix + "profile", JSON.stringify(this.profile));
+    // Dual-write to Firestore
+    if (this.firebaseInitialized && firestoreService && firestoreService.isReady()) {
+      firestoreService.saveProfile(this.profile).catch(err => console.error('[Sync] Profile save error:', err));
+    }
   }
 
   saveWeights() {
     localStorage.setItem(this.keyPrefix + "current_weights", JSON.stringify(this.currentWeights));
+    // Dual-write to Firestore
+    if (this.firebaseInitialized && firestoreService && firestoreService.isReady()) {
+      firestoreService.saveExerciseTargets(this.currentWeights).catch(err => console.error('[Sync] Weights save error:', err));
+    }
   }
 
   saveHistory() {
@@ -170,6 +309,11 @@ class StateManager {
     // Append to history
     this.history.push(record);
     this.saveHistory();
+
+    // Sync to Firestore
+    if (this.firebaseInitialized && firestoreService && firestoreService.isReady()) {
+      firestoreService.saveWorkoutSession(record).catch(err => console.error('[Sync] Workout session save error:', err));
+    }
 
     // Process Progressive Overloading Rules
     const overloadReport = [];
@@ -281,8 +425,18 @@ class StateManager {
   removeExerciseFromHistory(workoutKey, dateStr, exName) {
     const record = this.history.find(log => log.date === dateStr && log.workoutKey === workoutKey);
     if (!record) return;
+
+    // Sync removal to Firestore
+    if (this.firebaseInitialized && firestoreService && firestoreService.isReady()) {
+      firestoreService.removeExerciseLog(record.id, exName).catch(err => console.error('[Sync] Exercise log remove error:', err));
+    }
+
     record.exercises = record.exercises.filter(e => e.name !== exName);
     if (record.exercises.length === 0) {
+      // Delete the entire session from Firestore too
+      if (this.firebaseInitialized && firestoreService && firestoreService.isReady()) {
+        firestoreService.deleteWorkoutSession(record.id).catch(err => console.error('[Sync] Session delete error:', err));
+      }
       this.history = this.history.filter(log => log.id !== record.id);
     }
     this.saveHistory();
@@ -298,6 +452,7 @@ class StateManager {
 
     // 1. Find or create daily session log
     let record = this.history.find(log => log.date === dateStr && log.workoutKey === workoutKey);
+    let isNewSession = false;
     if (!record) {
       record = {
         id: Date.now().toString(),
@@ -307,6 +462,7 @@ class StateManager {
         exercises: []
       };
       this.history.push(record);
+      isNewSession = true;
     }
 
     // 2. Add or update the single exercise inside that daily session
@@ -323,6 +479,16 @@ class StateManager {
     }
 
     this.saveHistory();
+
+    // Sync to Firestore
+    if (this.firebaseInitialized && firestoreService && firestoreService.isReady()) {
+      if (isNewSession) {
+        firestoreService.saveWorkoutSession(record).catch(err => console.error('[Sync] Workout session save error:', err));
+      } else {
+        firestoreService.saveExerciseLog(record.id, dateStr, workoutKey, exerciseRecord)
+          .catch(err => console.error('[Sync] Exercise log save error:', err));
+      }
+    }
 
     // 3. Process Progressive Overloading Rules for this single exercise
     const current = this.currentWeights[exName];
@@ -376,6 +542,12 @@ class StateManager {
     }
     this.saveWeightLogs();
     this.saveProfile();
+
+    // Sync individual weight log to Firestore
+    if (this.firebaseInitialized && firestoreService && firestoreService.isReady()) {
+      firestoreService.saveWeightLog(dateStr, parseFloat(weightVal))
+        .catch(err => console.error('[Sync] Weight log save error:', err));
+    }
   }
 
   getTDEEData() {
@@ -417,6 +589,7 @@ const appState = new StateManager();
 
 // --- UI Logic & Render Components ---
 document.addEventListener("DOMContentLoaded", () => {
+  // Phase 1: Instant UI render from localStorage (fast first paint)
   initTabs();
   initProfileForm();
   initWeightLogger();
@@ -425,7 +598,53 @@ document.addEventListener("DOMContentLoaded", () => {
   renderPlanList();
   renderHistoryTable();
   buildCharts();
+
+  // Phase 2: Async Firebase initialization (background)
+  appState.initAsync().catch(err => {
+    console.error('[Boot] Firebase async init error:', err);
+  });
 });
+
+/**
+ * Update the sync status indicator in the header
+ * @param {string} status - 'synced' | 'syncing' | 'offline' | 'error' | 'initializing' | 'local-only'
+ * @param {string} label - Display text for the status
+ */
+function updateSyncStatusUI(status, label) {
+  const indicator = document.getElementById('sync-status-indicator');
+  if (!indicator) return;
+
+  const dot = indicator.querySelector('.sync-dot');
+  const labelEl = indicator.querySelector('.sync-label');
+
+  if (dot) {
+    // Remove all status classes
+    dot.className = 'sync-dot';
+    // Add the new status class
+    dot.classList.add(status);
+  }
+
+  if (labelEl) {
+    labelEl.textContent = label || status;
+  }
+}
+
+/**
+ * Re-render all UI components (called after Firestore data loads)
+ */
+function refreshAllUI() {
+  try {
+    initProfileForm();
+    initWeightLogger();
+    renderCalorieWidget();
+    renderPlanList();
+    renderHistoryTable();
+    renderActiveWorkout();
+    buildCharts();
+  } catch (err) {
+    console.error('[UI] Error refreshing UI:', err);
+  }
+}
 
 // 1. Tab Navigation
 function initTabs() {
@@ -1244,6 +1463,10 @@ function renderHistoryTable() {
     btn.addEventListener("click", (e) => {
       const id = e.target.getAttribute("data-id");
       if (confirm("Are you sure you want to delete this workout entry? This will not revert your progressive overload values but will remove this log from history.")) {
+        // Sync deletion to Firestore
+        if (appState.firebaseInitialized && firestoreService && firestoreService.isReady()) {
+          firestoreService.deleteWorkoutSession(id).catch(err => console.error('[Sync] History delete error:', err));
+        }
         appState.history = appState.history.filter(log => log.id !== id);
         appState.saveHistory();
         renderHistoryTable();
