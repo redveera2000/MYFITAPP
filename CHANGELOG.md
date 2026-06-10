@@ -4,6 +4,12 @@ All notable changes to the AESTHETIX V-TRACK fitness tracker will be documented 
 
 ---
 
+## [1.2.1] - 2026-06-10
+### Fixed
+- **Weight Logging Sync**: Fixed a bug where editing or logging a past daily weight incorrectly updated the active profile weight to that historical value instead of preserving the most recent chronological weight.
+
+---
+
 ## [1.2.0] - 2026-06-10
 ### Added
 - **Single Exercise Saving**: Added card-level "Save Exercise" buttons to save sets for each exercise independently, avoiding accidental logs.

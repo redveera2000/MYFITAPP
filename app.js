@@ -350,7 +350,13 @@ class StateManager {
     }
     // Sort chronologically
     this.weightLogs.sort((a, b) => new Date(a.date) - new Date(b.date));
-    this.profile.weight = parseFloat(weightVal); // update profile weight to latest
+    
+    // Always set profile weight to the chronologically latest log entry
+    if (this.weightLogs.length > 0) {
+      this.profile.weight = this.weightLogs[this.weightLogs.length - 1].weight;
+    } else {
+      this.profile.weight = parseFloat(weightVal);
+    }
     this.saveWeightLogs();
     this.saveProfile();
   }
@@ -459,6 +465,10 @@ function initProfileForm() {
 
     appState.saveProfile();
     renderCalorieWidget();
+
+    // Sync back to dashboard logger input if it exists
+    const dashboardWeightField = document.getElementById("log-w-val");
+    if (dashboardWeightField) dashboardWeightField.value = appState.profile.weight;
   };
 
   const inputs = [ageInput, heightInput, weightInput, actSelect, deficitInput];
@@ -527,9 +537,9 @@ function initWeightLogger() {
 
     appState.addWeightLog(val, dt);
     
-    // Sync profile display fields
+    // Sync profile display fields to the actual current latest weight
     const profWeightField = document.getElementById("prof-weight");
-    if (profWeightField) profWeightField.value = val;
+    if (profWeightField) profWeightField.value = appState.profile.weight;
     
     renderCalorieWidget();
     buildCharts();
