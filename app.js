@@ -201,7 +201,11 @@ class StateManager {
     const minReps = current.minReps;
     const maxReps = current.maxReps;
     const targetSets = loggedSets.length;
-    const prevWeight = current.weight;
+    
+    // Fix: Base the progressive overload calculations on the manual weight entered by the user
+    // in this session instead of the default suggested weight from state.
+    const validLog = loggedSets.find(s => s.weight !== undefined && s.weight !== null && !isNaN(s.weight));
+    const prevWeight = validLog ? parseFloat(validLog.weight) : current.weight;
 
     if (targetSets === 0) {
       return null; // Exercise was skipped/deleted entirely
@@ -251,6 +255,89 @@ class StateManager {
       status,
       reason
     };
+  }
+
+  // Check if an exercise has already been logged for a specific date/session
+  isExerciseLogged(workoutKey, dateStr, exName) {
+    const record = this.history.find(log => log.date === dateStr && log.workoutKey === workoutKey);
+    if (!record) return false;
+    const ex = record.exercises.find(e => e.name === exName);
+    if (!ex) return false;
+    return ex.sets.some(s => s.reps !== null && s.reps !== undefined && s.reps !== "");
+  }
+
+  // Remove a single exercise from a specific daily log in history
+  removeExerciseFromHistory(workoutKey, dateStr, exName) {
+    const record = this.history.find(log => log.date === dateStr && log.workoutKey === workoutKey);
+    if (!record) return;
+    record.exercises = record.exercises.filter(e => e.name !== exName);
+    if (record.exercises.length === 0) {
+      this.history = this.history.filter(log => log.id !== record.id);
+    }
+    this.saveHistory();
+  }
+
+  // Log a single exercise's sets and update history and progressive overload weight
+  logSingleExercise(workoutKey, dateStr, exName, loggedSets) {
+    // 1. Find or create daily session log
+    let record = this.history.find(log => log.date === dateStr && log.workoutKey === workoutKey);
+    if (!record) {
+      record = {
+        id: Date.now().toString(),
+        date: dateStr,
+        workoutKey: workoutKey,
+        workoutName: DEFAULT_PROGRAM[workoutKey].name,
+        exercises: []
+      };
+      this.history.push(record);
+    }
+
+    // 2. Add or update the single exercise inside that daily session
+    const exIndex = record.exercises.findIndex(e => e.name === exName);
+    const exerciseRecord = {
+      name: exName,
+      sets: loggedSets
+    };
+
+    if (exIndex !== -1) {
+      record.exercises[exIndex] = exerciseRecord;
+    } else {
+      record.exercises.push(exerciseRecord);
+    }
+
+    this.saveHistory();
+
+    // 3. Process Progressive Overloading Rules for this single exercise
+    const current = this.currentWeights[exName];
+    let overloadReportItem = null;
+
+    if (current) {
+      const result = this.calculateNextStep(exName, loggedSets);
+      if (result) {
+        this.currentWeights[exName].weight = result.nextWeight;
+        overloadReportItem = {
+          name: exName,
+          oldWeight: result.prevWeight,
+          newWeight: result.nextWeight,
+          status: result.status,
+          reason: result.reason
+        };
+      }
+      this.saveWeights();
+    }
+
+    // 4. Sync only this single exercise log payload to Google Sheets (formatted like a standard daily log but with only 1 exercise)
+    if (this.profile.sheetsUrl) {
+      const singleSyncPayload = {
+        date: dateStr,
+        workoutKey: workoutKey,
+        workoutName: record.workoutName,
+        exercises: [exerciseRecord]
+      };
+      syncToGoogleSheets(singleSyncPayload, this.profile.sheetsUrl);
+    }
+
+    return overloadReportItem;
   }
 
   addWeightLog(weightVal, dateStr) {
@@ -426,8 +513,8 @@ function initWeightLogger() {
 
   if (!wBtn) return;
 
-  // Default to today
-  wDate.value = new Date().toISOString().split("T")[0];
+  // Default to today using timezone-accurate local date
+  wDate.value = getLocalDateString();
   wVal.value = appState.profile.weight;
 
   wBtn.addEventListener("click", () => {
@@ -457,6 +544,27 @@ function initWeightLogger() {
   });
 }
 
+// Helper: Get timezone-accurate local date YYYY-MM-DD
+function getLocalDateString() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+// Helper: Update weekday name label next to date picker
+function updateWeekdayLabel(wDateElement) {
+  const lbl = document.getElementById("workout-weekday-lbl");
+  if (!lbl || !wDateElement || !wDateElement.value) return;
+  const dateVal = wDateElement.value;
+  const parts = dateVal.split("-");
+  if (parts.length !== 3) return;
+  const localDate = new Date(parts[0], parts[1] - 1, parts[2]);
+  const weekday = localDate.toLocaleDateString("en-US", { weekday: 'long' });
+  lbl.textContent = `(${weekday})`;
+}
+
 // 5. Active Workout Logging Interface
 let activeWorkoutKey = "push1";
 
@@ -479,10 +587,15 @@ function initWorkoutSelector() {
     renderActiveWorkout();
   });
 
-  // Load current date
+  // Load current date with timezone-accurate local date and update weekday label
   const wDate = document.getElementById("workout-date");
   if (wDate) {
-    wDate.value = new Date().toISOString().split("T")[0];
+    wDate.value = getLocalDateString();
+    updateWeekdayLabel(wDate);
+    wDate.addEventListener("change", () => {
+      updateWeekdayLabel(wDate);
+      renderActiveWorkout(); // re-render to load correct date history indicators
+    });
   }
 
   renderActiveWorkout();
@@ -572,7 +685,10 @@ function renderActiveWorkout() {
   container.innerHTML = "";
   const program = DEFAULT_PROGRAM[activeWorkoutKey];
   
-  // Find the last logged workout of this key
+  const wDate = document.getElementById("workout-date");
+  const dateStr = wDate ? wDate.value : getLocalDateString();
+
+  // Find the last logged workout of this key (for comparison details)
   const lastLog = [...appState.history]
     .reverse()
     .find(log => log.workoutKey === activeWorkoutKey);
@@ -581,9 +697,12 @@ function renderActiveWorkout() {
     const trackerState = appState.currentWeights[ex.name] || { weight: ex.defaultWeight, minReps: ex.minReps, maxReps: ex.maxReps, sets: ex.sets };
     const curWeight = trackerState.weight;
 
+    // Check if this exercise was already saved for the currently selected date
+    const isSaved = appState.isExerciseLogged(activeWorkoutKey, dateStr, ex.name);
+
     const card = document.createElement("div");
     const isStrength = ex.category === 'strength';
-    card.className = `exercise-log-card glass-panel${isStrength ? ' strength-card' : ''}`;
+    card.className = `exercise-log-card glass-panel${isStrength ? ' strength-card' : ''}${isSaved ? ' saved-card' : ''}`;
     card.setAttribute("data-ex-name", ex.name);
 
     // Generate category and rest badges
@@ -603,39 +722,63 @@ function renderActiveWorkout() {
 
         if (setStrings) {
           const d = new Date(lastLog.date);
-          const dateStr = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-          lastLogHtml = `<span class="glow-txt">${dateStr}</span> ➔ ${setStrings}`;
+          const dateStrLabel = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+          lastLogHtml = `<span class="glow-txt">${dateStrLabel}</span> ➔ ${setStrings}`;
+        }
+      }
+    }
+
+    // Determine what sets to draw: use historical log if already saved today
+    let savedSets = null;
+    if (isSaved) {
+      const dailyLog = appState.history.find(log => log.date === dateStr && log.workoutKey === activeWorkoutKey);
+      if (dailyLog) {
+        const loggedEx = dailyLog.exercises.find(e => e.name === ex.name);
+        if (loggedEx) {
+          savedSets = loggedEx.sets;
         }
       }
     }
 
     let setsHtml = "";
-    const defaultSets = 3; // Force 3 sets by default for all exercises
-    for (let s = 1; s <= defaultSets; s++) {
+    const numSets = savedSets ? savedSets.length : 3; // use saved length or default 3 sets
+    for (let s = 1; s <= numSets; s++) {
       const { targetReps, lastRepsText } = getTargetRepsForSet(ex.name, s - 1);
+      
+      let weightVal = curWeight;
+      let repsVal = targetReps;
+      if (savedSets && savedSets[s - 1]) {
+        weightVal = savedSets[s - 1].weight;
+        repsVal = savedSets[s - 1].reps !== null ? savedSets[s - 1].reps : "";
+      }
 
       setsHtml += `
         <div class="set-row" data-set-num="${s}">
           <span class="set-num">Set ${s}</span>
           <div class="set-inputs">
             <div class="input-wrapper">
-              <input type="number" step="0.5" class="set-weight-input" value="${curWeight}" placeholder="kg">
+              <input type="number" step="0.5" class="set-weight-input" value="${weightVal}" placeholder="kg" ${isSaved ? 'disabled' : ''}>
               <span class="input-unit">kg</span>
             </div>
             <div class="input-wrapper">
-              <input type="number" class="set-reps-input" value="${targetReps}" placeholder="${targetReps}" title="Target: ${targetReps} reps">
+              <input type="number" class="set-reps-input" value="${repsVal}" placeholder="${targetReps}" title="Target: ${targetReps} reps" ${isSaved ? 'disabled' : ''}>
               <span class="input-unit">reps</span>
             </div>
           </div>
           <div class="target-badge">Target: <strong class="glow-txt" style="color: var(--accent-primary);">${targetReps}</strong> reps <span style="font-size:10px; color: var(--text-muted);">(Last: ${lastRepsText})</span></div>
-          <button class="delete-set-btn" title="Delete Set" onclick="removeSetRow(this)">&times;</button>
+          ${isSaved ? '' : `<button class="delete-set-btn" title="Delete Set" onclick="removeSetRow(this)">&times;</button>`}
         </div>
       `;
     }
 
+    const savedBadgeHtml = isSaved ? `<span class="saved-badge">Saved ✓</span>` : '';
+
     card.innerHTML = `
       <div class="exercise-card-header">
-        <h4 class="exercise-name">${ex.name}</h4>
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+          <h4 class="exercise-name" style="margin: 0;">${ex.name}</h4>
+          ${savedBadgeHtml}
+        </div>
         <div class="exercise-card-tags">
           ${categoryBadge}
           <span class="exercise-type-tag ${trackerState.type}">${trackerState.type.toUpperCase()}</span>
@@ -655,10 +798,23 @@ function renderActiveWorkout() {
       <div class="sets-list-container">
         ${setsHtml}
       </div>
-      <button class="add-set-row-btn" onclick="addSetRow(this)">
-        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
-        Add Set
-      </button>
+      <div class="exercise-card-actions" style="display: flex; gap: 12px; margin-top: 15px; justify-content: space-between;">
+        ${isSaved ? `
+          <button class="btn btn-secondary edit-lift-btn" onclick="unlockSingleLift(this)" style="max-width: 130px; font-size: 13px; padding: 8px 16px;">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="margin-right: 4px; display: inline-block; vertical-align: middle;"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+            Edit Log
+          </button>
+        ` : `
+          <button class="add-set-row-btn" onclick="addSetRow(this)">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+            Add Set
+          </button>
+          <button class="btn save-lift-btn" onclick="saveSingleLift(this)" style="max-width: 150px; font-size: 13px; padding: 8px 16px; background-color: var(--accent-primary); color: var(--bg-color);">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="margin-right: 4px; display: inline-block; vertical-align: middle;"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+            Save Exercise
+          </button>
+        `}
+      </div>
     `;
 
     container.appendChild(card);
@@ -677,21 +833,29 @@ function submitLoggedWorkout() {
   }
 
   const cards = container.querySelectorAll(".exercise-log-card");
-  const loggedExercises = [];
-
-  let anyDataLogged = false;
+  const report = [];
+  let savedCount = 0;
+  let unsavedWithDataCount = 0;
 
   cards.forEach(card => {
     const exName = card.getAttribute("data-ex-name");
+    const isAlreadySaved = card.classList.contains("saved-card");
+
+    if (isAlreadySaved) {
+      savedCount++;
+      return;
+    }
+
     const setRows = card.querySelectorAll(".set-row");
     const sets = [];
+    let hasReps = false;
 
-    setRows.forEach((row) => {
+    setRows.forEach(row => {
       const weightVal = parseFloat(row.querySelector(".set-weight-input").value);
       const repsVal = parseInt(row.querySelector(".set-reps-input").value);
 
       if (!isNaN(repsVal)) {
-        anyDataLogged = true;
+        hasReps = true;
       }
 
       sets.push({
@@ -700,39 +864,107 @@ function submitLoggedWorkout() {
       });
     });
 
-    // Only include exercises that have at least one set remaining in the log
-    if (setRows.length > 0) {
-      loggedExercises.push({
-        name: exName,
-        sets: sets
-      });
+    if (hasReps) {
+      unsavedWithDataCount++;
+      const reportItem = appState.logSingleExercise(activeWorkoutKey, dateStr, exName, sets);
+      if (reportItem) {
+        report.push(reportItem);
+      }
     }
   });
 
-  if (!anyDataLogged) {
-    alert("You must log reps for at least one set to save the workout!");
+  if (unsavedWithDataCount === 0) {
+    if (savedCount === cards.length) {
+      alert("All exercises for this session are already saved!");
+    } else {
+      alert("You must log reps for at least one set to save the workout!");
+    }
     return;
   }
 
-  // Submit and get overloading suggestions
-  const report = appState.logWorkout(activeWorkoutKey, dateStr, loggedExercises);
-
-  // Sync to Google Sheets if URL exists
-  if (appState.profile.sheetsUrl) {
-    const record = appState.history[appState.history.length - 1];
-    if (record) {
-      syncToGoogleSheets(record, appState.profile.sheetsUrl);
-    }
+  // Show overload report modal or alert
+  if (report.length > 0) {
+    showOverloadModal(report);
+  } else {
+    alert("Workout logs saved successfully!");
   }
-
-  // Show overload report modal or overlay
-  showOverloadModal(report);
 
   // Refresh other tabs & lists
   renderPlanList();
   renderHistoryTable();
   buildCharts();
-  renderActiveWorkout(); // Refresh weights fields to new suggested baselines
+  renderActiveWorkout();
+}
+
+function saveSingleLift(btn) {
+  const card = btn.closest(".exercise-log-card");
+  const exName = card.getAttribute("data-ex-name");
+  
+  const wDate = document.getElementById("workout-date");
+  if (!wDate) return;
+  const dateStr = wDate.value;
+  if (!dateStr) {
+    alert("Please select a valid date for this workout.");
+    return;
+  }
+
+  const setRows = card.querySelectorAll(".set-row");
+  const sets = [];
+  let anyReps = false;
+
+  setRows.forEach(row => {
+    const weightVal = parseFloat(row.querySelector(".set-weight-input").value);
+    const repsVal = parseInt(row.querySelector(".set-reps-input").value);
+
+    if (!isNaN(repsVal)) {
+      anyReps = true;
+    }
+
+    sets.push({
+      weight: isNaN(weightVal) ? 0 : weightVal,
+      reps: isNaN(repsVal) ? null : repsVal
+    });
+  });
+
+  if (!anyReps) {
+    alert("You must log reps for at least one set to save this exercise!");
+    return;
+  }
+
+  // Save via StateManager
+  const reportItem = appState.logSingleExercise(activeWorkoutKey, dateStr, exName, sets);
+
+  // Show overload suggestion in modal
+  if (reportItem) {
+    showOverloadModal([reportItem]);
+  } else {
+    alert(`${exName} saved successfully!`);
+  }
+
+  // Refresh tabs and display to show saved state
+  renderPlanList();
+  renderHistoryTable();
+  buildCharts();
+  renderActiveWorkout();
+}
+
+function unlockSingleLift(btn) {
+  const card = btn.closest(".exercise-log-card");
+  const exName = card.getAttribute("data-ex-name");
+  
+  const wDate = document.getElementById("workout-date");
+  if (!wDate) return;
+  const dateStr = wDate.value;
+
+  if (confirm(`Are you sure you want to edit your logs for "${exName}"? This will allow you to change the logged sets and save them again.`)) {
+    appState.removeExerciseFromHistory(activeWorkoutKey, dateStr, exName);
+    
+    // Refresh lists and display to show editable state
+    renderPlanList();
+    renderHistoryTable();
+    buildCharts();
+    renderActiveWorkout();
+  }
 }
 
 function showOverloadModal(report) {
