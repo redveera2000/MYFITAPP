@@ -4,6 +4,15 @@ All notable changes to the AESTHETIX V-TRACK fitness tracker will be documented 
 
 ---
 
+## [1.2.2] - 2026-06-10
+### Added
+- **Workout Status Badge**: Added a dynamic completion badge (`IN PROGRESS` / `COMPLETED ✓`) next to the Workout Session selector dropdown to indicate logging status.
+### Fixed
+- **Accidental Double Submission**: Prevented duplicate logs and sync webhooks by disabling buttons immediately on click and implementing backend state validators in `StateManager`.
+- **Deduplication of History Logs**: Added history parsing filters to automatically remove any duplicate daily session logs from local storage databases.
+
+---
+
 ## [1.2.1] - 2026-06-10
 ### Fixed
 - **Weight Logging Sync**: Fixed a bug where editing or logging a past daily weight incorrectly updated the active profile weight to that historical value instead of preserving the most recent chronological weight.

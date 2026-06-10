@@ -129,6 +129,17 @@ class StateManager {
 
     // Initialize Workout Logs History
     this.history = history ? JSON.parse(history) : [];
+
+    // Clean up duplicate workout records from history if any exist (same date and same workoutKey)
+    if (this.history && this.history.length > 0) {
+      const seen = new Set();
+      this.history = this.history.filter(log => {
+        const uniqueKey = `${log.date}_${log.workoutKey}`;
+        if (seen.has(uniqueKey)) return false;
+        seen.add(uniqueKey);
+        return true;
+      });
+    }
   }
 
   saveProfile() {
@@ -279,6 +290,12 @@ class StateManager {
 
   // Log a single exercise's sets and update history and progressive overload weight
   logSingleExercise(workoutKey, dateStr, exName, loggedSets) {
+    // Prevent duplicate logs of the same exercise on the same date
+    if (this.isExerciseLogged(workoutKey, dateStr, exName)) {
+      console.warn(`Exercise "${exName}" is already logged for ${dateStr}. Ignoring duplicate save.`);
+      return null;
+    }
+
     // 1. Find or create daily session log
     let record = this.history.find(log => log.date === dateStr && log.workoutKey === workoutKey);
     if (!record) {
@@ -692,6 +709,9 @@ function renderActiveWorkout() {
   const container = document.getElementById("workout-exercises-container");
   if (!container) return;
 
+  // Update the status badge next to selector
+  updateWorkoutStatusBadge();
+ 
   container.innerHTML = "";
   const program = DEFAULT_PROGRAM[activeWorkoutKey];
   
@@ -831,14 +851,64 @@ function renderActiveWorkout() {
   });
 }
 
+function updateWorkoutStatusBadge() {
+  const badge = document.getElementById("workout-status-badge");
+  if (!badge) return;
+
+  const wDate = document.getElementById("workout-date");
+  const dateStr = wDate ? wDate.value : getLocalDateString();
+  const program = DEFAULT_PROGRAM[activeWorkoutKey];
+  if (!program) {
+    badge.style.display = "none";
+    return;
+  }
+
+  let savedCount = 0;
+  program.exercises.forEach(ex => {
+    if (appState.isExerciseLogged(activeWorkoutKey, dateStr, ex.name)) {
+      savedCount++;
+    }
+  });
+
+  if (savedCount === 0) {
+    badge.style.display = "none";
+  } else if (savedCount === program.exercises.length) {
+    badge.style.display = "inline-flex";
+    badge.style.background = "rgba(46, 204, 113, 0.15)";
+    badge.style.color = "#2ecc71";
+    badge.style.border = "1px solid rgba(46, 204, 113, 0.3)";
+    badge.style.alignItems = "center";
+    badge.style.justifyContent = "center";
+    badge.textContent = "COMPLETED ✓";
+  } else {
+    badge.style.display = "inline-flex";
+    badge.style.background = "rgba(241, 196, 15, 0.15)";
+    badge.style.color = "#f1c40f";
+    badge.style.border = "1px solid rgba(241, 196, 15, 0.3)";
+    badge.style.alignItems = "center";
+    badge.style.justifyContent = "center";
+    badge.textContent = "IN PROGRESS";
+  }
+}
+
 function submitLoggedWorkout() {
+  const saveBtn = document.getElementById("save-workout-btn");
+  if (saveBtn) {
+    if (saveBtn.disabled) return;
+    saveBtn.disabled = true;
+  }
+
   const container = document.getElementById("workout-exercises-container");
   const wDate = document.getElementById("workout-date");
-  if (!container || !wDate) return;
-
+  if (!container || !wDate) {
+    if (saveBtn) saveBtn.disabled = false;
+    return;
+  }
+ 
   const dateStr = wDate.value;
   if (!dateStr) {
     alert("Please select a valid date for this workout.");
+    if (saveBtn) saveBtn.disabled = false;
     return;
   }
 
@@ -884,6 +954,7 @@ function submitLoggedWorkout() {
   });
 
   if (unsavedWithDataCount === 0) {
+    if (saveBtn) saveBtn.disabled = false;
     if (savedCount === cards.length) {
       alert("All exercises for this session are already saved!");
     } else {
@@ -907,14 +978,28 @@ function submitLoggedWorkout() {
 }
 
 function saveSingleLift(btn) {
+  if (btn.disabled) return;
+  btn.disabled = true;
+
   const card = btn.closest(".exercise-log-card");
   const exName = card.getAttribute("data-ex-name");
   
   const wDate = document.getElementById("workout-date");
-  if (!wDate) return;
+  if (!wDate) {
+    btn.disabled = false;
+    return;
+  }
   const dateStr = wDate.value;
   if (!dateStr) {
     alert("Please select a valid date for this workout.");
+    btn.disabled = false;
+    return;
+  }
+
+  // Double submit check via state
+  if (appState.isExerciseLogged(activeWorkoutKey, dateStr, exName)) {
+    alert(`This exercise ("${exName}") has already been saved for this date!`);
+    btn.disabled = false;
     return;
   }
 
@@ -938,6 +1023,7 @@ function saveSingleLift(btn) {
 
   if (!anyReps) {
     alert("You must log reps for at least one set to save this exercise!");
+    btn.disabled = false;
     return;
   }
 
