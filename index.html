@@ -15,7 +15,7 @@
 </head>
 <body>
 
-  <div class="app-container">
+  <div class="app-container" style="display: none;">
     
     <!-- Premium Header -->
     <header class="app-header">
@@ -31,8 +31,11 @@
           <span class="sync-label">Connecting...</span>
         </div>
         <div class="user-avatar">V</div>
-        <div class="user-info-text">
-          User: <strong>Veeradinesh</strong>
+        <div class="user-info-text" style="display: flex; align-items: center; gap: 8px;">
+          <span>User: <strong>Veeradinesh</strong></span>
+          <button id="auth-signout-btn" class="signout-btn-header" title="Sign Out">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+          </button>
         </div>
       </div>
     </header>
@@ -414,6 +417,47 @@ function doGet() {
       </div>
       <div class="modal-footer">
         <button onclick="document.getElementById('overload-report-modal').classList.remove('show')" class="btn" style="max-width: 120px;">Got it!</button>
+      </div>
+    </div>
+  </div>
+  <!-- Fullscreen Login Access Gateway -->
+  <div id="login-container" class="login-overlay" style="display: flex;">
+    <div class="login-card glass-panel animate-fade-in">
+      <div class="login-brand">
+        <span class="logo-glow">Aesthetix</span>
+        <span class="logo-sub">V-Track Engine</span>
+      </div>
+      
+      <h3 class="login-title" id="login-form-title">Access Gateway</h3>
+      <p class="login-desc" id="login-form-desc">Provide authorization credentials to access your fitness engine.</p>
+      
+      <div id="login-error-alert" class="login-error-box" style="display: none;"></div>
+      
+      <form id="login-form" autocomplete="on" novalidate>
+        <div class="form-group">
+          <label for="login-email">Authorized Email Address</label>
+          <input type="email" id="login-email" class="form-control" placeholder="name@domain.com" required autocomplete="username">
+        </div>
+        
+        <div class="form-group" style="position: relative; margin-bottom: 24px;">
+          <label for="login-password">Access Password</label>
+          <div class="password-input-wrapper">
+            <input type="password" id="login-password" class="form-control" placeholder="••••••••" required autocomplete="current-password">
+            <button type="button" id="toggle-password-btn" class="toggle-password-btn" title="Toggle Password Visibility">
+              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" class="eye-open-icon"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" class="eye-closed-icon" style="display: none;"><path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18"/></svg>
+            </button>
+          </div>
+        </div>
+        
+        <button type="submit" id="login-submit-btn" class="btn" style="margin-top: 10px;">
+          <span class="btn-text">Sign In</span>
+          <div class="btn-spinner" style="display: none;"></div>
+        </button>
+      </form>
+      
+      <div class="login-footer">
+        <a href="#" id="toggle-setup-mode-link">First-Time Setup? Register Account</a>
       </div>
     </div>
   </div>

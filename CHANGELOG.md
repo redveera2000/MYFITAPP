@@ -4,6 +4,20 @@ All notable changes to the AESTHETIX V-TRACK fitness tracker will be documented 
 
 ---
 
+## [1.5.0] - 2026-06-10
+### Added
+- **🔒 Compulsory Secure Login Gateway**: Replaced automated credential bypass with a fullscreen credential entry screen. Users must sign in to view the dashboard or interact with data.
+- **🛡️ Secure Restricted Registration**: Registration is locked client-side to only allow registration of the pre-authorized administrator email (`SINGLE_USER_EMAIL`), preventing external signup vectors.
+- **👁️ Password Visibility Switcher**: Added a toggle button in the password input field to securely show/hide passwords during entry.
+- **🚪 Manual Sign-Out**: Added a logout button in the dashboard quick profile header to sign out securely at any time.
+
+### Changed
+- **app.js & index.html refactored**: Completely restructured the DOMContentLoaded rendering path to prevent unauthenticated data leaks, added dynamic loading spinners, validation warnings, and modal overlay state machines.
+- **index.css styling updated**: Added high-fidelity glassmorphic overlay stylesheets, animated spinner keyframes, and input focus state glows.
+- **docker-compose.yml updated**: Bumped image tag to `1.5.0`.
+
+---
+
 ## [1.4.0] - 2026-06-10
 ### Added
 - **🔒 Stable Single-User Authentication**: Replaced Firebase Anonymous Auth with an automated Email/Password login mechanism. The app now automatically signs in as a single permanent user, preventing the creation of multiple user profiles when the browser cache or history is cleared.

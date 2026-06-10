@@ -152,6 +152,8 @@ class StateManager {
     if (typeof isFirebaseConfigured === 'function' && !isFirebaseConfigured()) {
       console.log('[StateManager] Firebase not configured. Running in local-only mode.');
       updateSyncStatusUI('local-only', 'Local Only');
+      document.getElementById('login-container').style.display = 'none';
+      document.querySelector('.app-container').style.display = 'block';
       return;
     }
 
@@ -159,64 +161,94 @@ class StateManager {
     if (typeof initFirebase === 'function') {
       try {
         updateSyncStatusUI('initializing', 'Connecting...');
-        const uid = await initFirebase();
+        
+        // initFirebase returns a Promise that resolves with initial UID or null
+        await initFirebase();
 
-        if (!uid) {
-          console.warn('[StateManager] Firebase init returned no UID. Running in local-only mode.');
-          updateSyncStatusUI('local-only', 'Local Only');
-          return;
-        }
+        // Listen for authentication changes to drive the app data flow
+        firebaseAuth.onAuthStateChanged(async (user) => {
+          if (user) {
+            const authorizedEmail = typeof getAuthorizedEmail === 'function' ? getAuthorizedEmail() : 'singleuser@vtrack.app';
+            if (user.email && user.email.toLowerCase() === authorizedEmail) {
+              console.log(`[StateManager] Authenticated as authorized user: ${user.email}`);
+              
+              if (typeof firestoreService !== 'undefined') {
+                firestoreService.init(getFirestoreDb(), user.uid);
+                
+                // Register sync status listener
+                onSyncStatusChange((status) => {
+                  const labels = {
+                    'synced': 'Cloud Synced',
+                    'syncing': 'Syncing...',
+                    'offline': 'Offline',
+                    'error': 'Sync Error',
+                    'initializing': 'Connecting...'
+                  };
+                  updateSyncStatusUI(status, labels[status] || status);
+                });
 
-        // Initialize the Firestore service
-        if (typeof firestoreService !== 'undefined') {
-          firestoreService.init(getFirestoreDb(), uid);
+                // Check if we need to migrate localStorage data to Firestore
+                const hasCloud = await firestoreService.hasFirestoreData();
+                const migrationDone = await firestoreService.isMigrationDone();
 
-          // Register sync status listener
-          onSyncStatusChange((status) => {
-            const labels = {
-              'synced': 'Cloud Synced',
-              'syncing': 'Syncing...',
-              'offline': 'Offline',
-              'error': 'Sync Error',
-              'initializing': 'Connecting...'
-            };
-            updateSyncStatusUI(status, labels[status] || status);
-          });
+                if (!hasCloud && !migrationDone && this.hasLocalData()) {
+                  console.log('[StateManager] First-time migration: uploading localStorage to Firestore...');
+                  updateSyncStatusUI('syncing', 'Migrating...');
+                  const success = await firestoreService.migrateFromLocalStorage({
+                    profile: this.profile,
+                    currentWeights: this.currentWeights,
+                    history: this.history,
+                    weightLogs: this.weightLogs
+                  });
+                  if (success) {
+                    console.log('[StateManager] Migration complete!');
+                    updateSyncStatusUI('synced', 'Cloud Synced');
+                  }
+                } else if (hasCloud) {
+                  console.log('[StateManager] Loading data from Firestore...');
+                  updateSyncStatusUI('syncing', 'Loading...');
+                  await this.loadFromFirestore();
+                  updateSyncStatusUI('synced', 'Cloud Synced');
+                }
 
-          // Check if we need to migrate localStorage data to Firestore
-          const hasCloud = await firestoreService.hasFirestoreData();
-          const migrationDone = await firestoreService.isMigrationDone();
-
-          if (!hasCloud && !migrationDone && this.hasLocalData()) {
-            console.log('[StateManager] First-time migration: uploading localStorage to Firestore...');
-            updateSyncStatusUI('syncing', 'Migrating...');
-            const success = await firestoreService.migrateFromLocalStorage({
-              profile: this.profile,
-              currentWeights: this.currentWeights,
-              history: this.history,
-              weightLogs: this.weightLogs
-            });
-            if (success) {
-              console.log('[StateManager] Migration complete!');
-              updateSyncStatusUI('synced', 'Cloud Synced');
+                this.firebaseInitialized = true;
+              }
+              
+              // Switch layout visibility: hide login overlay and show app container
+              document.getElementById('login-container').style.display = 'none';
+              document.querySelector('.app-container').style.display = 'block';
+            } else {
+              console.warn(`[StateManager] Blocked unauthorized sign-in: ${user.email}`);
+              if (typeof signOutUser === 'function') {
+                await signOutUser();
+              }
+              const loginErrorAlert = document.getElementById('login-error-alert');
+              if (loginErrorAlert) {
+                loginErrorAlert.textContent = "Access denied. This email is not authorized to access this fitness engine.";
+                loginErrorAlert.style.display = 'block';
+              }
             }
-          } else if (hasCloud) {
-            // Load data from Firestore (cloud is source of truth)
-            console.log('[StateManager] Loading data from Firestore...');
-            updateSyncStatusUI('syncing', 'Loading...');
-            await this.loadFromFirestore();
-            updateSyncStatusUI('synced', 'Cloud Synced');
+          } else {
+            console.log('[StateManager] User is logged out. Showing login gateway.');
+            this.firebaseInitialized = false;
+            if (typeof firestoreService !== 'undefined') {
+              firestoreService.init(null, null);
+            }
+            // Switch layout visibility: hide app and show login overlay
+            document.querySelector('.app-container').style.display = 'none';
+            document.getElementById('login-container').style.display = 'flex';
+            updateSyncStatusUI('offline', 'Offline');
           }
+        });
 
-          this.firebaseInitialized = true;
-          console.log('[StateManager] Firebase integration active.');
-        }
       } catch (error) {
         console.error('[StateManager] Firebase async init failed:', error);
         updateSyncStatusUI('error', 'Sync Error');
       }
     } else {
       updateSyncStatusUI('local-only', 'Local Only');
+      document.getElementById('login-container').style.display = 'none';
+      document.querySelector('.app-container').style.display = 'block';
     }
   }
 
@@ -598,12 +630,169 @@ document.addEventListener("DOMContentLoaded", () => {
   renderPlanList();
   renderHistoryTable();
   buildCharts();
+  
+  // Initialize secure Auth UI handlers (Login inputs, buttons, errors, spinners)
+  initAuthUI();
 
   // Phase 2: Async Firebase initialization (background)
   appState.initAsync().catch(err => {
     console.error('[Boot] Firebase async init error:', err);
   });
 });
+
+/**
+ * Initializes and wires up event listeners for the AESTHETIX secure access gateway.
+ */
+function initAuthUI() {
+  const loginForm = document.getElementById('login-form');
+  const loginEmail = document.getElementById('login-email');
+  const loginPassword = document.getElementById('login-password');
+  const togglePasswordBtn = document.getElementById('toggle-password-btn');
+  const toggleSetupModeLink = document.getElementById('toggle-setup-mode-link');
+  const loginFormTitle = document.getElementById('login-form-title');
+  const loginFormDesc = document.getElementById('login-form-desc');
+  const loginErrorAlert = document.getElementById('login-error-alert');
+  const submitBtn = document.getElementById('login-submit-btn');
+  const submitBtnText = submitBtn ? submitBtn.querySelector('.btn-text') : null;
+  const submitBtnSpinner = submitBtn ? submitBtn.querySelector('.btn-spinner') : null;
+  const signoutBtn = document.getElementById('auth-signout-btn');
+
+  let isRegisterMode = false;
+
+  // Set default placeholder for email if configured
+  if (loginEmail && typeof getAuthorizedEmail === 'function') {
+    loginEmail.value = getAuthorizedEmail();
+  }
+
+  // Password Visibility Toggle
+  if (togglePasswordBtn && loginPassword) {
+    togglePasswordBtn.addEventListener('click', () => {
+      const isPassword = loginPassword.type === 'password';
+      loginPassword.type = isPassword ? 'text' : 'password';
+      
+      const eyeOpen = togglePasswordBtn.querySelector('.eye-open-icon');
+      const eyeClosed = togglePasswordBtn.querySelector('.eye-closed-icon');
+      
+      if (eyeOpen && eyeClosed) {
+        if (isPassword) {
+          eyeOpen.style.display = 'none';
+          eyeClosed.style.display = 'block';
+        } else {
+          eyeOpen.style.display = 'block';
+          eyeClosed.style.display = 'none';
+        }
+      }
+    });
+  }
+
+  // Switch between Sign In and Registration views
+  if (toggleSetupModeLink) {
+    toggleSetupModeLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      isRegisterMode = !isRegisterMode;
+      
+      if (loginErrorAlert) loginErrorAlert.style.display = 'none';
+      if (loginPassword) loginPassword.value = '';
+
+      if (isRegisterMode) {
+        if (loginFormTitle) loginFormTitle.textContent = "First-Time Registration";
+        if (loginFormDesc) loginFormDesc.textContent = "Create your permanent access password. Only the authorized email can be registered.";
+        if (submitBtnText) submitBtnText.textContent = "Register & Sign In";
+        toggleSetupModeLink.textContent = "Already have an account? Sign In";
+      } else {
+        if (loginFormTitle) loginFormTitle.textContent = "Access Gateway";
+        if (loginFormDesc) loginFormDesc.textContent = "Provide credentials to access your fitness engine.";
+        if (submitBtnText) submitBtnText.textContent = "Sign In";
+        toggleSetupModeLink.textContent = "First-Time Setup? Register Account";
+      }
+    });
+  }
+
+  // Header Sign Out button listener
+  if (signoutBtn) {
+    signoutBtn.addEventListener('click', async () => {
+      if (confirm("Are you sure you want to sign out of Aesthetix?")) {
+        try {
+          if (typeof signOutUser === 'function') {
+            await signOutUser();
+          }
+        } catch (err) {
+          console.error('[Auth] Sign-out error:', err);
+        }
+      }
+    });
+  }
+
+  // Form Submission handling
+  if (loginForm) {
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const email = loginEmail ? loginEmail.value.trim() : '';
+      const password = loginPassword ? loginPassword.value : '';
+
+      if (loginErrorAlert) loginErrorAlert.style.display = 'none';
+
+      if (!email || !password) {
+        showLoginError("Please enter both email and password.");
+        return;
+      }
+
+      setSubmitLoading(true);
+
+      try {
+        if (isRegisterMode) {
+          if (typeof registerUser === 'function') {
+            await registerUser(email, password);
+            console.log("[Auth] User registered successfully");
+          }
+        } else {
+          if (typeof signInUser === 'function') {
+            await signInUser(email, password);
+            console.log("[Auth] User signed in successfully");
+          }
+        }
+      } catch (err) {
+        console.error('[Auth] Authentication failed:', err);
+        let userMessage = err.message;
+        if (err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
+          userMessage = "Invalid credentials. Please verify your email and access password.";
+        } else if (err.code === 'auth/invalid-email') {
+          userMessage = "Invalid email format. Please provide a valid email.";
+        } else if (err.code === 'auth/weak-password') {
+          userMessage = "Password is too weak. Must be at least 6 characters.";
+        } else if (err.code === 'auth/operation-not-allowed') {
+          userMessage = "Email/Password sign-in provider is disabled in Firebase Console.";
+        }
+        showLoginError(userMessage);
+        setSubmitLoading(false);
+      }
+    });
+  }
+
+  function showLoginError(msg) {
+    if (loginErrorAlert) {
+      loginErrorAlert.textContent = msg;
+      loginErrorAlert.style.display = 'block';
+    }
+  }
+
+  function setSubmitLoading(isLoading) {
+    if (submitBtn) submitBtn.disabled = isLoading;
+    if (loginEmail) loginEmail.disabled = isLoading;
+    if (loginPassword) loginPassword.disabled = isLoading;
+    
+    if (submitBtnSpinner && submitBtnText) {
+      if (isLoading) {
+        submitBtnSpinner.style.display = 'inline-block';
+        submitBtnText.style.opacity = '0.5';
+      } else {
+        submitBtnSpinner.style.display = 'none';
+        submitBtnText.style.opacity = '1';
+      }
+    }
+  }
+}
 
 /**
  * Update the sync status indicator in the header

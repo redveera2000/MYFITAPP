@@ -87,34 +87,12 @@ async function initFirebase() {
       console.log('[Firebase] Firestore network enabled.');
     });
 
-    // Automatically sign in to the single permanent user account (frictionless — no login screen needed)
-    let email = singleUserConfig.email;
-    let password = singleUserConfig.password;
-
-    if (!email || email === "" || email.startsWith("${")) {
-      email = "singleuser@vtrack.app";
-    }
-    if (!password || password === "" || password.startsWith("${")) {
-      password = "vtrackDefaultPassword123!";
-    }
-
-    let userCredential;
-    try {
-      userCredential = await firebaseAuth.signInWithEmailAndPassword(email, password);
-      console.log(`[Firebase] Automated single-user sign in successful. UID: ${userCredential.user.uid}`);
-    } catch (err) {
-      if (err.code === 'auth/user-not-found') {
-        console.log(`[Firebase] User account not found. Registering new single user: ${email}`);
-        userCredential = await firebaseAuth.createUserWithEmailAndPassword(email, password);
-        console.log(`[Firebase] New single user registered and signed in. UID: ${userCredential.user.uid}`);
-      } else if (err.code === 'auth/operation-not-allowed') {
-        console.error('[Firebase] Email/Password sign-in provider is disabled in your Firebase console. Please enable it under Authentication -> Sign-in method.');
-        throw err;
-      } else {
-        throw err;
-      }
-    }
-    currentUserId = userCredential.user.uid;
+    // Resolve a promise once the initial auth state is verified
+    let initialAuthChecked = false;
+    let authResolve = null;
+    const authInitPromise = new Promise((resolve) => {
+      authResolve = resolve;
+    });
 
     // Listen for auth state changes
     firebaseAuth.onAuthStateChanged((user) => {
@@ -125,17 +103,74 @@ async function initFirebase() {
         currentUserId = null;
         console.log('[Firebase] Auth state: signed out');
       }
+
+      if (!initialAuthChecked) {
+        initialAuthChecked = true;
+        authResolve(currentUserId);
+      }
     });
 
     firebaseReady = true;
     setSyncStatus('synced');
-    return currentUserId;
+    return authInitPromise;
 
   } catch (error) {
     console.error('[Firebase] Initialization failed:', error);
     setSyncStatus('error');
     firebaseReady = false;
     return null;
+  }
+}
+
+/**
+ * Helper to resolve the single authorized administrator email
+ */
+function getAuthorizedEmail() {
+  let email = singleUserConfig.email;
+  if (!email || email === "" || email.startsWith("${")) {
+    return "singleuser@vtrack.app";
+  }
+  return email.trim().toLowerCase();
+}
+
+/**
+ * Authenticates user using Email/Password
+ */
+async function signInUser(email, password) {
+  const authorized = getAuthorizedEmail();
+  const inputEmail = email.trim().toLowerCase();
+
+  if (inputEmail !== authorized) {
+    const error = new Error("Access denied. Email address is not authorized for this application.");
+    error.code = "auth/access-denied";
+    throw error;
+  }
+
+  return firebaseAuth.signInWithEmailAndPassword(inputEmail, password);
+}
+
+/**
+ * Registers new user using Email/Password (restricted to authorized email only)
+ */
+async function registerUser(email, password) {
+  const authorized = getAuthorizedEmail();
+  const inputEmail = email.trim().toLowerCase();
+
+  if (inputEmail !== authorized) {
+    const error = new Error("Registration is restricted to the authorized administrator email only.");
+    error.code = "auth/registration-restricted";
+    throw error;
+  }
+
+  return firebaseAuth.createUserWithEmailAndPassword(inputEmail, password);
+}
+
+/**
+ * Logs out the current user
+ */
+async function signOutUser() {
+  if (firebaseAuth) {
+    return firebaseAuth.signOut();
   }
 }
 
