@@ -4,6 +4,28 @@ All notable changes to the AESTHETIX V-TRACK fitness tracker will be documented 
 
 ---
 
+## [1.6.0] - 2026-06-10
+### Added — Smart Training Coach (Progressive Overload Recommendation System)
+- **🧠 RecommendationEngine Class**: New `RecommendationEngine` in `app.js` with 7 evidence-based detection algorithms for analyzing workout performance:
+  - **Weight Deviation Detection**: Alerts when logged weight is 15%+ above target (warning) or 30%+ above (critical ego-lifting). Also detects when weight is 20%+ below target (sandbagging).
+  - **Set Count Anomaly Detection**: Warns when fewer sets than prescribed are completed (volume loss) or excess sets are logged (junk volume).
+  - **Rep Distribution Analysis**: Detects erratic rep performance (high variance across sets), indicating weight may be too heavy.
+  - **Plateau Detection**: Identifies when performance stalls for 3+ consecutive sessions at the same weight and reps.
+  - **Missed Progression Detection**: Alerts when user hits max reps on all sets for 2+ sessions without increasing weight.
+  - **Overreaching Detection**: Critical alert when reps decline across 3+ consecutive sessions (fatigue accumulation), recommending a deload week.
+- **📊 Dashboard Smart Coach Alerts Panel**: New glassmorphic panel at the top of the Dashboard tab showing persistent training alerts with severity color-coding (🔴 Critical, 🟡 Warning, 🟢 Info).
+- **⚡ Modal Training Insights Section**: Enhanced overload recommendation modal now includes a "Training Insights" section showing real-time Smart Coach alerts alongside the existing progressive overload calculations.
+- **🎨 Severity-Coded Alert Cards**: Individual alert cards with severity-specific styling (red border for critical, amber for warning, green for info), micro-animations (slide-in entry, pulse for critical alerts), and actionable recommendation boxes.
+
+### Changed
+- **`showOverloadModal()`**: Updated to accept a second `coachAlerts` parameter for displaying training insights alongside overload updates.
+- **`saveSingleLift()` & `submitLoggedWorkout()`**: Both save paths now run the Smart Coach analysis engine after saving, collecting alerts to display in the modal.
+- **`refreshAllUI()`**: Now includes `renderCoachAlerts()` call for dashboard alert updates.
+- **Cache-busting**: All asset imports bumped to `?v=1.6.0`.
+- **Docker**: Image tag bumped to `1.6.0`.
+
+---
+
 ## [1.5.2] - 2026-06-10
 ### Fixed
 - **🔒 Secured Auth Error Outputs**: Removed expected authorized email details from console logs and user interface error screens to prevent unauthorized email leaks.

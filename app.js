@@ -619,6 +619,401 @@ class StateManager {
 // Instantiate state
 const appState = new StateManager();
 
+// --- Progressive Overload Recommendation Engine (Smart Training Coach) ---
+class RecommendationEngine {
+  constructor(stateManager) {
+    this.state = stateManager;
+    // Deviation thresholds (percentage-based, from progressive overload research)
+    this.WEIGHT_WARNING_THRESHOLD = 0.15;   // 15% above/below target
+    this.WEIGHT_CRITICAL_THRESHOLD = 0.30;  // 30% above target (ego-lifting)
+    this.WEIGHT_LIGHT_THRESHOLD = 0.20;     // 20% below target (sandbagging)
+    this.PLATEAU_SESSION_THRESHOLD = 3;     // 3+ sessions of stagnation
+    this.MISSED_PROGRESSION_THRESHOLD = 2;  // 2+ sessions at max reps without weight increase
+    this.OVERREACHING_SESSION_THRESHOLD = 3; // 3+ sessions of declining reps
+    this.REP_VARIANCE_THRESHOLD = 3;        // Standard deviation of reps across sets
+    this.MAX_EXTRA_SETS = 2;                // Extra sets beyond prescribed before warning
+    this.HISTORY_LOOKBACK = 5;              // Number of historical sessions to analyze
+  }
+
+  /**
+   * Retrieve the last N logged sessions for a specific exercise+workoutKey combination
+   */
+  getExerciseHistory(exName, workoutKey, limit) {
+    const lookback = limit || this.HISTORY_LOOKBACK;
+    const relevantLogs = this.state.history
+      .filter(log => log.workoutKey === workoutKey)
+      .sort((a, b) => new Date(a.date) - new Date(b.date)); // chronological
+
+    const entries = [];
+    relevantLogs.forEach(log => {
+      const ex = log.exercises.find(e => e.name === exName);
+      if (ex && ex.sets && ex.sets.length > 0) {
+        const completedSets = ex.sets.filter(s => s.reps !== null && s.reps !== undefined && s.reps !== "");
+        if (completedSets.length > 0) {
+          entries.push({
+            date: log.date,
+            sets: completedSets,
+            avgWeight: completedSets.reduce((sum, s) => sum + (s.weight || 0), 0) / completedSets.length,
+            avgReps: completedSets.reduce((sum, s) => sum + s.reps, 0) / completedSets.length,
+            totalVolume: completedSets.reduce((sum, s) => sum + ((s.weight || 0) * s.reps), 0),
+            setCount: completedSets.length
+          });
+        }
+      }
+    });
+
+    return entries.slice(-lookback);
+  }
+
+  /**
+   * Detect if logged weight deviates significantly from the target weight
+   * Covers: "Wrong weight" scenarios
+   */
+  detectWeightDeviation(exName, loggedSets, originalTargetWeight) {
+    const target = this.state.currentWeights[exName];
+    if (!target || target.failureOnly) return null;
+
+    const targetWeight = (originalTargetWeight !== undefined && originalTargetWeight !== null)
+      ? originalTargetWeight
+      : target.weight;
+    if (targetWeight <= 0) return null;
+
+    // Use the weight from the first valid set (user typically enters same weight for all sets)
+    const validSet = loggedSets.find(s => s.weight !== undefined && s.weight !== null && !isNaN(s.weight) && s.weight > 0);
+    if (!validSet) return null;
+
+    const loggedWeight = parseFloat(validSet.weight);
+    const deviation = (loggedWeight - targetWeight) / targetWeight;
+    const absDeviation = Math.abs(deviation);
+    const deviationPct = Math.round(absDeviation * 100);
+
+    if (deviation > this.WEIGHT_CRITICAL_THRESHOLD) {
+      // Weight is 30%+ above target — critical ego-lifting warning
+      const safeWeight = targetWeight + (targetWeight * 0.10); // suggest 10% above max
+      return {
+        type: 'wrong-weight',
+        severity: 'critical',
+        exercise: exName,
+        title: '🚨 Weight Dangerously Heavy',
+        message: `You logged ${loggedWeight}kg but your target is ${targetWeight}kg (${deviationPct}% above target). This jump far exceeds safe progressive overload limits and significantly increases injury risk.`,
+        recommendation: `Immediately reduce weight to ${Math.round(safeWeight / 2.5) * 2.5}kg. Progressive overload recommends max 5-10% weight increases per progression cycle.`,
+        dataPoints: { targetWeight, loggedWeight, deviation: deviationPct, direction: 'heavy' }
+      };
+    } else if (deviation > this.WEIGHT_WARNING_THRESHOLD) {
+      // Weight is 15-30% above target — warning
+      return {
+        type: 'wrong-weight',
+        severity: 'warning',
+        exercise: exName,
+        title: '⚠️ Weight Above Target',
+        message: `You logged ${loggedWeight}kg but your progressive overload target is ${targetWeight}kg (${deviationPct}% above). Using a weight beyond your current progression level may compromise form.`,
+        recommendation: `Consider reducing to ${targetWeight}kg and focusing on hitting ${target.maxReps} reps on all sets before progressing. Double Progression demands mastery at the current level first.`,
+        dataPoints: { targetWeight, loggedWeight, deviation: deviationPct, direction: 'heavy' }
+      };
+    } else if (deviation < -this.WEIGHT_LIGHT_THRESHOLD) {
+      // Weight is 20%+ below target — sandbagging
+      return {
+        type: 'wrong-weight',
+        severity: 'warning',
+        exercise: exName,
+        title: '⚠️ Weight Below Target',
+        message: `You logged ${loggedWeight}kg but your target is ${targetWeight}kg (${deviationPct}% below). Training significantly below your progression target may not provide sufficient stimulus for muscle growth.`,
+        recommendation: `Increase weight to ${targetWeight}kg for your next session. If the target weight feels too heavy, try ${Math.round((targetWeight * 0.9) / 2.5) * 2.5}kg (10% deload) to rebuild.`,
+        dataPoints: { targetWeight, loggedWeight, deviation: deviationPct, direction: 'light' }
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Detect if the number of logged sets deviates from the prescribed count
+   * Covers: "Wrong sets" scenarios
+   */
+  detectSetCountAnomaly(exName, loggedSets) {
+    const target = this.state.currentWeights[exName];
+    if (!target || target.failureOnly) return null;
+
+    const targetSets = target.sets;
+    const completedSets = loggedSets.filter(s => s.reps !== null && s.reps !== undefined && s.reps !== "");
+    const loggedCount = completedSets.length;
+
+    if (loggedCount < targetSets) {
+      const missingCount = targetSets - loggedCount;
+      const volumeLoss = Math.round((missingCount / targetSets) * 100);
+      return {
+        type: 'wrong-sets',
+        severity: 'warning',
+        exercise: exName,
+        title: '⚠️ Incomplete Volume',
+        message: `You completed ${loggedCount} of ${targetSets} prescribed sets (${volumeLoss}% volume loss). Incomplete set coverage reduces training stimulus and may slow your progressive overload.`,
+        recommendation: `Aim to complete all ${targetSets} sets. If fatigue is causing early stops, consider a 10% deload to maintain full volume across all sets.`,
+        dataPoints: { targetSets, loggedCount, volumeLoss }
+      };
+    } else if (loggedCount > targetSets + this.MAX_EXTRA_SETS) {
+      return {
+        type: 'wrong-sets',
+        severity: 'info',
+        exercise: exName,
+        title: 'ℹ️ Excessive Volume (Junk Sets)',
+        message: `You logged ${loggedCount} sets but only ${targetSets} are prescribed. Beyond ${targetSets + this.MAX_EXTRA_SETS} sets, additional volume may be "junk volume" — adding fatigue without proportional muscle growth benefit.`,
+        recommendation: `Stick to ${targetSets} high-quality sets. If you feel energized, focus on pushing reps higher within the target range rather than adding sets.`,
+        dataPoints: { targetSets, loggedCount }
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Detect erratic rep distribution across sets (high variance = inconsistent performance)
+   */
+  detectRepDistributionIssue(exName, loggedSets) {
+    const target = this.state.currentWeights[exName];
+    if (!target || target.failureOnly) return null;
+
+    const completedSets = loggedSets.filter(s => s.reps !== null && s.reps !== undefined && s.reps !== "");
+    if (completedSets.length < 2) return null;
+
+    const reps = completedSets.map(s => parseInt(s.reps));
+    const mean = reps.reduce((a, b) => a + b, 0) / reps.length;
+    const variance = reps.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / reps.length;
+    const stdDev = Math.sqrt(variance);
+
+    if (stdDev > this.REP_VARIANCE_THRESHOLD) {
+      const maxReps = Math.max(...reps);
+      const minReps = Math.min(...reps);
+      return {
+        type: 'form-warning',
+        severity: 'warning',
+        exercise: exName,
+        title: '⚠️ Erratic Rep Performance',
+        message: `Your reps varied widely across sets (${minReps} to ${maxReps} reps, std dev: ${stdDev.toFixed(1)}). This usually indicates the weight is too heavy to sustain consistent performance, or rest periods are insufficient.`,
+        recommendation: `Consider reducing weight by 5-10% to achieve consistent reps across all sets. Target a stable ${target.minReps}-${target.maxReps} range on every set. Ensure you are resting ${this._getRestForExercise(exName)} between sets.`,
+        dataPoints: { reps, stdDev: stdDev.toFixed(1), minReps, maxReps }
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Detect training plateau: same weight + stagnant reps for 3+ consecutive sessions
+   */
+  detectPlateau(exName, workoutKey) {
+    const history = this.getExerciseHistory(exName, workoutKey);
+    if (history.length < this.PLATEAU_SESSION_THRESHOLD) return null;
+
+    const recent = history.slice(-this.PLATEAU_SESSION_THRESHOLD);
+    const firstEntry = recent[0];
+
+    // Check if weight and average reps are essentially unchanged across all recent sessions
+    const allSameWeight = recent.every(h => Math.abs(h.avgWeight - firstEntry.avgWeight) < 1.0);
+    const allSameReps = recent.every(h => Math.abs(h.avgReps - firstEntry.avgReps) < 1.0);
+
+    if (allSameWeight && allSameReps) {
+      const target = this.state.currentWeights[exName];
+      const avgReps = Math.round(firstEntry.avgReps);
+      const weight = Math.round(firstEntry.avgWeight * 10) / 10;
+      const sessionCount = recent.length;
+
+      // Are they stuck below max reps?
+      const belowMax = target && avgReps < target.maxReps;
+
+      return {
+        type: 'plateau',
+        severity: 'warning',
+        exercise: exName,
+        title: '📊 Plateau Detected',
+        message: `You've been at ${weight}kg for ~${avgReps} reps across ${sessionCount} consecutive sessions. Your performance has stalled — this is a classic training plateau.`,
+        recommendation: belowMax
+          ? `Try these strategies: (1) Add 1 rep per set each session until you hit ${target.maxReps} reps across all sets. (2) If stalled for 4+ weeks, schedule a deload week at 60% intensity. (3) Consider micro-loading (+1.25kg) instead of standard jumps.`
+          : `You are hitting max reps consistently. You should be ready to progress weight! Try increasing by the minimum increment (2.5kg).`,
+        dataPoints: { weight, avgReps, sessionCount, sessions: recent.map(h => h.date) }
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Detect missed progression: hitting max reps on all sets for 2+ sessions without weight increase
+   */
+  detectMissedProgression(exName, workoutKey) {
+    const target = this.state.currentWeights[exName];
+    if (!target || target.failureOnly) return null;
+
+    const history = this.getExerciseHistory(exName, workoutKey);
+    if (history.length < this.MISSED_PROGRESSION_THRESHOLD) return null;
+
+    const recent = history.slice(-this.MISSED_PROGRESSION_THRESHOLD);
+
+    // Check if all recent sessions had all sets at or above max reps, at the same weight
+    const allMaxed = recent.every(h => {
+      const sameWeight = Math.abs(h.avgWeight - recent[0].avgWeight) < 1.0;
+      const hitsMax = h.sets.every(s => s.reps >= target.maxReps);
+      return sameWeight && hitsMax;
+    });
+
+    if (allMaxed) {
+      const currentWeight = Math.round(recent[0].avgWeight * 10) / 10;
+      // Determine appropriate increment
+      const heavyLifts = ["Barbell Squats", "Romanian Deadlifts", "Leg Press", "Lat Pulldowns", "Barbell Rows", "Chest Supported DB Rows/Cable Rows", "Chest Supported Upper Back Rows"];
+      const isHeavy = heavyLifts.some(l => exName.toLowerCase().includes(l.toLowerCase()));
+      const increment = isHeavy ? 5.0 : 2.5;
+      const nextWeight = currentWeight + increment;
+
+      return {
+        type: 'missed-progression',
+        severity: 'info',
+        exercise: exName,
+        title: '🚀 Ready to Progress!',
+        message: `You've hit ${target.maxReps} reps on ALL sets for ${recent.length} consecutive sessions at ${currentWeight}kg. You have mastered this weight — it's time to progress!`,
+        recommendation: `Increase weight to ${nextWeight}kg next session. Your reps will naturally drop back to ~${target.minReps} — that's expected. Build back up to ${target.maxReps} reps at the new weight before progressing again (Double Progression).`,
+        dataPoints: { currentWeight, nextWeight, increment, sessionsAtMax: recent.length }
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Detect overreaching: reps declining across 3+ consecutive sessions (fatigue accumulation)
+   */
+  detectOverreaching(exName, workoutKey) {
+    const history = this.getExerciseHistory(exName, workoutKey);
+    if (history.length < this.OVERREACHING_SESSION_THRESHOLD) return null;
+
+    const recent = history.slice(-this.OVERREACHING_SESSION_THRESHOLD);
+
+    // Check for strictly declining average reps across consecutive sessions
+    let declining = true;
+    for (let i = 1; i < recent.length; i++) {
+      if (recent[i].avgReps >= recent[i - 1].avgReps) {
+        declining = false;
+        break;
+      }
+    }
+
+    if (declining) {
+      const repTrend = recent.map(h => Math.round(h.avgReps * 10) / 10);
+      const totalDrop = Math.round((repTrend[0] - repTrend[repTrend.length - 1]) * 10) / 10;
+
+      return {
+        type: 'overreaching',
+        severity: 'critical',
+        exercise: exName,
+        title: '🔴 Overreaching Detected',
+        message: `Your reps have been declining for ${recent.length} consecutive sessions (${repTrend.join(' → ')} avg reps). A drop of ${totalDrop} reps signals accumulated fatigue — your body is not recovering between sessions.`,
+        recommendation: `Schedule a deload week: reduce training volume by 40-50% (fewer sets, lighter weight at RPE 5-6). After the deload, resume at your current weight — you should see an immediate performance rebound.`,
+        dataPoints: { repTrend, totalDrop, sessionCount: recent.length }
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Helper: Get rest period for an exercise from program config
+   */
+  _getRestForExercise(exName) {
+    for (const dayKey of Object.keys(DEFAULT_PROGRAM)) {
+      const ex = DEFAULT_PROGRAM[dayKey].exercises.find(e => e.name === exName);
+      if (ex) {
+        const secs = ex.restSeconds || 90;
+        if (secs >= 60) {
+          const mins = Math.floor(secs / 60);
+          const rem = secs % 60;
+          return rem > 0 ? `${mins}m ${rem}s` : `${mins} min`;
+        }
+        return `${secs}s`;
+      }
+    }
+    return '90s';
+  }
+
+  /**
+   * Main analysis: run ALL detectors for a single exercise after it's logged
+   * Returns { alerts: [], insights: [] }
+   */
+  analyzeExercise(exName, loggedSets, workoutKey, originalTargetWeight) {
+    const alerts = [];
+
+    // 1. Weight deviation check
+    const weightAlert = this.detectWeightDeviation(exName, loggedSets, originalTargetWeight);
+    if (weightAlert) alerts.push(weightAlert);
+
+    // 2. Set count anomaly check
+    const setAlert = this.detectSetCountAnomaly(exName, loggedSets);
+    if (setAlert) alerts.push(setAlert);
+
+    // 3. Rep distribution check
+    const repAlert = this.detectRepDistributionIssue(exName, loggedSets);
+    if (repAlert) alerts.push(repAlert);
+
+    // 4. Plateau detection (historical)
+    const plateauAlert = this.detectPlateau(exName, workoutKey);
+    if (plateauAlert) alerts.push(plateauAlert);
+
+    // 5. Missed progression detection (historical)
+    const progressionAlert = this.detectMissedProgression(exName, workoutKey);
+    if (progressionAlert) alerts.push(progressionAlert);
+
+    // 6. Overreaching detection (historical)
+    const overreachAlert = this.detectOverreaching(exName, workoutKey);
+    if (overreachAlert) alerts.push(overreachAlert);
+
+    // Sort by severity: critical > warning > info
+    const severityOrder = { critical: 0, warning: 1, info: 2 };
+    alerts.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
+
+    return { alerts };
+  }
+
+  /**
+   * Full dashboard scan: analyze ALL exercises across all workout days
+   * Returns a flat array of alerts for the dashboard Smart Coach panel
+   */
+  generateDashboardAlerts() {
+    const allAlerts = [];
+
+    Object.keys(DEFAULT_PROGRAM).forEach(dayKey => {
+      DEFAULT_PROGRAM[dayKey].exercises.forEach(ex => {
+        if (ex.failureOnly) return;
+
+        const history = this.getExerciseHistory(ex.name, dayKey);
+        if (history.length < 2) return; // Need at least 2 sessions for trend analysis
+
+        // Run historical detectors only (not per-session weight/set checks)
+        const plateauAlert = this.detectPlateau(ex.name, dayKey);
+        if (plateauAlert) allAlerts.push(plateauAlert);
+
+        const progressionAlert = this.detectMissedProgression(ex.name, dayKey);
+        if (progressionAlert) allAlerts.push(progressionAlert);
+
+        const overreachAlert = this.detectOverreaching(ex.name, dayKey);
+        if (overreachAlert) allAlerts.push(overreachAlert);
+      });
+    });
+
+    // Sort by severity, then deduplicate by exercise name + type
+    const severityOrder = { critical: 0, warning: 1, info: 2 };
+    allAlerts.sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
+
+    // Deduplicate: keep the highest severity alert per exercise
+    const seen = new Set();
+    return allAlerts.filter(alert => {
+      const key = `${alert.exercise}_${alert.type}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+}
+
+// Instantiate the recommendation engine
+const coachEngine = new RecommendationEngine(appState);
+
 // --- UI Logic & Render Components ---
 document.addEventListener("DOMContentLoaded", () => {
   // Phase 1: Instant UI render from localStorage (fast first paint)
@@ -630,6 +1025,9 @@ document.addEventListener("DOMContentLoaded", () => {
   renderPlanList();
   renderHistoryTable();
   buildCharts();
+  
+  // Phase 1.5: Render Smart Coach Alerts from local data
+  renderCoachAlerts();
   
   // Initialize secure Auth UI handlers (Login inputs, buttons, errors, spinners)
   initAuthUI();
@@ -830,10 +1228,58 @@ function refreshAllUI() {
     renderHistoryTable();
     renderActiveWorkout();
     buildCharts();
+    renderCoachAlerts();
   } catch (err) {
     console.error('[UI] Error refreshing UI:', err);
   }
 }
+
+/**
+ * Render Smart Coach Alerts on the Dashboard tab
+ * Scans all exercises for training pattern issues (plateau, overreaching, missed progression)
+ */
+function renderCoachAlerts() {
+  const container = document.getElementById("coach-alerts-container");
+  const alertsList = document.getElementById("coach-alerts-list");
+  const countBadge = document.getElementById("coach-alerts-count");
+  if (!container || !alertsList) return;
+
+  const alerts = coachEngine.generateDashboardAlerts();
+
+  if (alerts.length === 0) {
+    container.style.display = "none";
+    return;
+  }
+
+  container.style.display = "block";
+  alertsList.innerHTML = "";
+  if (countBadge) countBadge.textContent = alerts.length;
+
+  alerts.forEach((alert, idx) => {
+    const card = document.createElement("div");
+    card.className = `coach-alert-card severity-${alert.severity}`;
+    card.style.animationDelay = `${idx * 0.08}s`;
+
+    const severityIcons = { critical: '🔴', warning: '🟡', info: '🟢' };
+    const severityLabels = { critical: 'CRITICAL', warning: 'WARNING', info: 'INFO' };
+
+    card.innerHTML = `
+      <div class="coach-alert-header">
+        <span class="coach-alert-severity-badge severity-${alert.severity}">
+          ${severityIcons[alert.severity]} ${severityLabels[alert.severity]}
+        </span>
+        <span class="coach-alert-exercise">${alert.exercise}</span>
+      </div>
+      <div class="coach-alert-title">${alert.title}</div>
+      <div class="coach-alert-message">${alert.message}</div>
+      <div class="coach-alert-recommendation">
+        <strong>💡 Recommendation:</strong> ${alert.recommendation}
+      </div>
+    `;
+    alertsList.appendChild(card);
+  });
+}
+
 
 // 1. Tab Navigation
 function initTabs() {
@@ -1325,6 +1771,8 @@ function submitLoggedWorkout() {
   let savedCount = 0;
   let unsavedWithDataCount = 0;
 
+  const allCoachAlerts = [];
+
   cards.forEach(card => {
     const exName = card.getAttribute("data-ex-name");
     const isAlreadySaved = card.classList.contains("saved-card");
@@ -1354,9 +1802,19 @@ function submitLoggedWorkout() {
 
     if (hasReps) {
       unsavedWithDataCount++;
+      
+      // Capture original weight before state update
+      const originalTarget = appState.currentWeights[exName];
+      const originalWeight = originalTarget ? originalTarget.weight : null;
+
       const reportItem = appState.logSingleExercise(activeWorkoutKey, dateStr, exName, sets);
       if (reportItem) {
         report.push(reportItem);
+      }
+      // Run Smart Coach analysis on the logged exercise (passing original weight for deviation checking)
+      const analysis = coachEngine.analyzeExercise(exName, sets, activeWorkoutKey, originalWeight);
+      if (analysis.alerts.length > 0) {
+        allCoachAlerts.push(...analysis.alerts);
       }
     }
   });
@@ -1371,9 +1829,9 @@ function submitLoggedWorkout() {
     return;
   }
 
-  // Show overload report modal or alert
-  if (report.length > 0) {
-    showOverloadModal(report);
+  // Show overload report modal or alert (now with Smart Coach insights)
+  if (report.length > 0 || allCoachAlerts.length > 0) {
+    showOverloadModal(report, allCoachAlerts);
   } else {
     alert("Workout logs saved successfully!");
   }
@@ -1435,12 +1893,20 @@ function saveSingleLift(btn) {
     return;
   }
 
+  // Capture original weight before state update
+  const originalTarget = appState.currentWeights[exName];
+  const originalWeight = originalTarget ? originalTarget.weight : null;
+
   // Save via StateManager
   const reportItem = appState.logSingleExercise(activeWorkoutKey, dateStr, exName, sets);
 
-  // Show overload suggestion in modal
-  if (reportItem) {
-    showOverloadModal([reportItem]);
+  // Run Smart Coach analysis on the saved exercise (passing original weight for deviation checking)
+  const analysis = coachEngine.analyzeExercise(exName, sets, activeWorkoutKey, originalWeight);
+  const coachAlerts = analysis.alerts || [];
+
+  // Show overload suggestion in modal (now with Smart Coach insights)
+  if (reportItem || coachAlerts.length > 0) {
+    showOverloadModal(reportItem ? [reportItem] : [], coachAlerts);
   } else {
     alert(`${exName} saved successfully!`);
   }
@@ -1471,7 +1937,7 @@ function unlockSingleLift(btn) {
   }
 }
 
-function showOverloadModal(report) {
+function showOverloadModal(report, coachAlerts) {
   const modal = document.getElementById("overload-report-modal");
   const reportList = document.getElementById("overload-report-list");
   if (!modal || !reportList) return;
@@ -1500,6 +1966,43 @@ function showOverloadModal(report) {
       `;
       reportList.appendChild(li);
     });
+  }
+
+  // Render Smart Coach Training Insights section
+  const insightsSection = document.getElementById("training-insights-section");
+  const insightsList = document.getElementById("training-insights-list");
+
+  if (insightsSection && insightsList) {
+    insightsList.innerHTML = "";
+
+    const alerts = coachAlerts || [];
+    if (alerts.length > 0) {
+      insightsSection.style.display = "block";
+      alerts.forEach(alert => {
+        const alertCard = document.createElement("div");
+        alertCard.className = `coach-alert-card severity-${alert.severity}`;
+
+        const severityIcons = { critical: '🔴', warning: '🟡', info: '🟢' };
+        const severityLabels = { critical: 'CRITICAL', warning: 'WARNING', info: 'INFO' };
+
+        alertCard.innerHTML = `
+          <div class="coach-alert-header">
+            <span class="coach-alert-severity-badge severity-${alert.severity}">
+              ${severityIcons[alert.severity]} ${severityLabels[alert.severity]}
+            </span>
+            <span class="coach-alert-exercise">${alert.exercise}</span>
+          </div>
+          <div class="coach-alert-title">${alert.title}</div>
+          <div class="coach-alert-message">${alert.message}</div>
+          <div class="coach-alert-recommendation">
+            <strong>💡 Recommendation:</strong> ${alert.recommendation}
+          </div>
+        `;
+        insightsList.appendChild(alertCard);
+      });
+    } else {
+      insightsSection.style.display = "none";
+    }
   }
 
   modal.classList.add("show");
