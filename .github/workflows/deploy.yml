@@ -28,6 +28,8 @@ jobs:
             echo "FIREBASE_STORAGE_BUCKET=${{ secrets.FIREBASE_STORAGE_BUCKET }}" >> .env
             echo "FIREBASE_MESSAGING_SENDER_ID=${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}" >> .env
             echo "FIREBASE_APP_ID=${{ secrets.FIREBASE_APP_ID }}" >> .env
+            echo "SINGLE_USER_EMAIL=${{ secrets.SINGLE_USER_EMAIL }}" >> .env
+            echo "SINGLE_USER_PASSWORD=${{ secrets.SINGLE_USER_PASSWORD }}" >> .env
             docker compose down
             docker compose build --no-cache
             docker compose up -d

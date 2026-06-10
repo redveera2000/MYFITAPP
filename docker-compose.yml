@@ -1,7 +1,7 @@
 services:
   vtrack:
     build: .
-    image: vtrack-app:1.3.0
+    image: vtrack-app:1.4.0
     container_name: vtrack-app
     restart: unless-stopped
     ports:
@@ -19,3 +19,5 @@ services:
       - FIREBASE_STORAGE_BUCKET=${FIREBASE_STORAGE_BUCKET}
       - FIREBASE_MESSAGING_SENDER_ID=${FIREBASE_MESSAGING_SENDER_ID}
       - FIREBASE_APP_ID=${FIREBASE_APP_ID}
+      - SINGLE_USER_EMAIL=${SINGLE_USER_EMAIL:-singleuser@vtrack.app}
+      - SINGLE_USER_PASSWORD=${SINGLE_USER_PASSWORD:-vtrackDefaultPassword123!}

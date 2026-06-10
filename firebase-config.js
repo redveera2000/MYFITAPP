@@ -19,6 +19,12 @@ const firebaseConfig = {
   appId: "${FIREBASE_APP_ID}"
 };
 
+// Single permanent user credentials for automated login
+const singleUserConfig = {
+  email: "${SINGLE_USER_EMAIL}",
+  password: "${SINGLE_USER_PASSWORD}"
+};
+
 // --- Initialize Firebase ---
 let firebaseApp = null;
 let firebaseAuth = null;
@@ -81,10 +87,34 @@ async function initFirebase() {
       console.log('[Firebase] Firestore network enabled.');
     });
 
-    // Sign in anonymously (frictionless — no login screen needed)
-    const userCredential = await firebaseAuth.signInAnonymously();
+    // Automatically sign in to the single permanent user account (frictionless — no login screen needed)
+    let email = singleUserConfig.email;
+    let password = singleUserConfig.password;
+
+    if (!email || email === "" || email.startsWith("${")) {
+      email = "singleuser@vtrack.app";
+    }
+    if (!password || password === "" || password.startsWith("${")) {
+      password = "vtrackDefaultPassword123!";
+    }
+
+    let userCredential;
+    try {
+      userCredential = await firebaseAuth.signInWithEmailAndPassword(email, password);
+      console.log(`[Firebase] Automated single-user sign in successful. UID: ${userCredential.user.uid}`);
+    } catch (err) {
+      if (err.code === 'auth/user-not-found') {
+        console.log(`[Firebase] User account not found. Registering new single user: ${email}`);
+        userCredential = await firebaseAuth.createUserWithEmailAndPassword(email, password);
+        console.log(`[Firebase] New single user registered and signed in. UID: ${userCredential.user.uid}`);
+      } else if (err.code === 'auth/operation-not-allowed') {
+        console.error('[Firebase] Email/Password sign-in provider is disabled in your Firebase console. Please enable it under Authentication -> Sign-in method.');
+        throw err;
+      } else {
+        throw err;
+      }
+    }
     currentUserId = userCredential.user.uid;
-    console.log(`[Firebase] Anonymous auth successful. UID: ${currentUserId}`);
 
     // Listen for auth state changes
     firebaseAuth.onAuthStateChanged((user) => {

@@ -4,6 +4,18 @@ All notable changes to the AESTHETIX V-TRACK fitness tracker will be documented 
 
 ---
 
+## [1.4.0] - 2026-06-10
+### Added
+- **🔒 Stable Single-User Authentication**: Replaced Firebase Anonymous Auth with an automated Email/Password login mechanism. The app now automatically signs in as a single permanent user, preventing the creation of multiple user profiles when the browser cache or history is cleared.
+- **⚙️ Secure Customizable Credentials**: Added support for `SINGLE_USER_EMAIL` and `SINGLE_USER_PASSWORD` environment variables in Docker, Nginx, and GitHub Actions deployments, with automated fallback defaults.
+
+### Changed
+- **docker-compose.yml updated**: Added `SINGLE_USER_EMAIL` and `SINGLE_USER_PASSWORD` with default fallbacks, and bumped the image tag to `1.4.0`.
+- **nginx/configure-firebase.sh updated**: Configured dynamic substitution for the new environment variables into the frontend config.
+- **.github/workflows/deploy.yml updated**: Configured GitHub Secrets injection for authentication parameters during deploy.
+
+---
+
 ## [1.3.0] - 2026-06-10
 ### Added
 - **🔥 Firebase Firestore Integration**: Migrated data persistence from `localStorage` to Cloud Firestore (serverless NoSQL database). All workout history, exercise targets, weight logs, and profile data now persist in the cloud.
