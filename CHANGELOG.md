@@ -4,6 +4,14 @@ All notable changes to the AESTHETIX V-TRACK fitness tracker will be documented 
 
 ---
 
+## [1.5.1] - 2026-06-10
+### Fixed
+- **🔍 Improved Auth Error Transparency**: Updated login error messages to output the expected authorized email if an "Access Denied" or "Registration Restricted" check triggers. This ensures easy debugging of host environment configuration mismatches.
+- **index.html updated**: Bumped version tag to `1.5.1` to break cache.
+- **docker-compose.yml updated**: Bumped image tag to `1.5.1`.
+
+---
+
 ## [1.5.0] - 2026-06-10
 ### Added
 - **🔒 Compulsory Secure Login Gateway**: Replaced automated credential bypass with a fullscreen credential entry screen. Users must sign in to view the dashboard or interact with data.

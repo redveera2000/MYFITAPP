@@ -141,7 +141,8 @@ async function signInUser(email, password) {
   const inputEmail = email.trim().toLowerCase();
 
   if (inputEmail !== authorized) {
-    const error = new Error("Access denied. Email address is not authorized for this application.");
+    console.error(`[Auth] Email mismatch. Input: "${inputEmail}", Authorized: "${authorized}"`);
+    const error = new Error(`Access denied. Email is not authorized. Expected: "${authorized}"`);
     error.code = "auth/access-denied";
     throw error;
   }
@@ -157,7 +158,8 @@ async function registerUser(email, password) {
   const inputEmail = email.trim().toLowerCase();
 
   if (inputEmail !== authorized) {
-    const error = new Error("Registration is restricted to the authorized administrator email only.");
+    console.error(`[Auth] Registration email mismatch. Input: "${inputEmail}", Authorized: "${authorized}"`);
+    const error = new Error(`Registration restricted. Expected authorized email: "${authorized}"`);
     error.code = "auth/registration-restricted";
     throw error;
   }
