@@ -978,8 +978,8 @@ class RecommendationEngine {
    * Helper: Get rest period for an exercise from program config
    */
   _getRestForExercise(exName) {
-    for (const dayKey of Object.keys(this.customProgram)) {
-      const ex = this.customProgram[dayKey].exercises.find(e => e.name === exName);
+    for (const dayKey of Object.keys(this.state.customProgram)) {
+      const ex = this.state.customProgram[dayKey].exercises.find(e => e.name === exName);
       if (ex) {
         const secs = ex.restSeconds || 90;
         if (secs >= 60) {
@@ -1038,8 +1038,8 @@ class RecommendationEngine {
   generateDashboardAlerts() {
     const allAlerts = [];
 
-    Object.keys(this.customProgram).forEach(dayKey => {
-      this.customProgram[dayKey].exercises.forEach(ex => {
+    Object.keys(this.state.customProgram).forEach(dayKey => {
+      this.state.customProgram[dayKey].exercises.forEach(ex => {
         if (ex.failureOnly) return;
 
         const history = this.getExerciseHistory(ex.name, dayKey);
