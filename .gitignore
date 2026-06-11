@@ -4,3 +4,5 @@
 *.log
 docker-compose.override.yml
 .env
+backup-service/service-account.json
+node_modules/

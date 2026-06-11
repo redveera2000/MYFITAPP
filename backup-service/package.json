@@ -1,0 +1,9 @@
+{
+  "name": "vtrack-backup",
+  "version": "1.0.0",
+  "description": "Firestore automated backup utility for V-TRACK",
+  "main": "backup.js",
+  "dependencies": {
+    "firebase-admin": "^12.1.0"
+  }
+}
