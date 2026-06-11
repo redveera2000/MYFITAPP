@@ -15,6 +15,9 @@ All notable changes to the AESTHETIX V-TRACK fitness tracker will be documented 
 - **Cache-busting**: Bumped asset tags in `index.html` to `?v=1.7.0` to force browser cache refresh.
 - **Docker Compose**: Bumped the production default image tag in `docker-compose.yml` to `1.7.0`.
 
+### Fixed
+- **🧠 Recommendation Engine Reference Error**: Resolved a `TypeError` on startup caused by the Smart Coach engine accessing `customProgram` directly on the recommendation engine class instead of via the `StateManager` state container.
+
 ---
 
 ## [1.6.1] - 2026-06-11
