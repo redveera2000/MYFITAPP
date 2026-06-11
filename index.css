@@ -1602,7 +1602,7 @@ input:focus::placeholder {
 
 /* =====================================================
    SMART COACH ALERTS — Dashboard Panel & Modal Insights
-   v1.6.1: Progressive Overload Recommendation System
+   v1.7.2: Exercise Removal & Active Session Discarding
    ===================================================== */
 
 /* --- Dashboard Coach Alerts Panel --- */
@@ -1848,4 +1848,40 @@ input:focus::placeholder {
     flex-wrap: wrap;
     gap: 8px;
   }
+}
+
+/* --- Deletion and Discard Action Buttons (v1.7.2) --- */
+.btn-danger-outline {
+  background: transparent;
+  border: 1px solid rgba(231, 76, 60, 0.45);
+  color: #ff6b6b;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-danger-outline:hover {
+  background: rgba(231, 76, 60, 0.2);
+  border-color: #ff4757;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(231, 76, 60, 0.3);
+}
+
+.delete-ex-btn {
+  background: transparent;
+  border: none;
+  color: rgba(231, 76, 60, 0.7);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  line-height: 1;
+}
+
+.delete-ex-btn:hover {
+  background: rgba(231, 76, 60, 0.2);
+  color: #ff4757;
+  transform: scale(1.1);
 }

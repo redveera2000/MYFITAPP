@@ -4,6 +4,43 @@ All notable changes to the AESTHETIX V-TRACK fitness tracker will be documented 
 
 ---
 
+## [1.7.2] - 2026-06-11
+### Added
+- **❌ Routine Exercise Deletion**: Added a "Remove Exercise" action button (subtle red glassmorphic design) to each exercise row in the **Workout Program & Baselines** tab. Deleting an exercise removes it from future logs without altering past history records.
+- **🗑️ Active Session Discarding**: Added a "Discard Session" option in the **Workout Dashboard** active logger. Users can now clear/delete all logged sets for the selected date and session in one click, syncing deletions to Cloud Firestore.
+
+### Changed
+- **Cache-busting**: Bumped all asset imports in `index.html` to `?v=1.7.2` to force cache refresh.
+- **Docker Compose**: Bumped default production docker image tag to `1.7.2`.
+
+---
+
+## [1.7.1] - 2026-06-11
+### Fixed
+- **🛡️ Secure Access Gateway Boot Flow**: Added robust defensive structural validation and loading guards for `customProgram` mapping. This prevents corrupt local storage state or uninitialized cache properties from triggering a fatal `TypeError` on boot, resolving the login gate initialization block.
+
+### Changed
+- **Cache-busting**: Bumped all frontend asset query parameters to `?v=1.7.1` to force browser cache reload.
+- **Docker Compose**: Bumped production container reference to `1.7.1`.
+
+---
+
+## [1.7.0] - 2026-06-11
+### Added
+- **🏋️‍♂️ Dynamic Routine Customizer**: Users can now add new custom exercises dynamically to any Push/Pull/Legs training day via a modal form on the Program tab.
+- **💾 Automated VPS Backups**: Containerized Node.js script using the Firebase Admin SDK to fetch all database collections (profiles, targets, history, weight logs) and store rolling 30-day backups on the VPS host disk.
+- **🔄 Live Frontend Restore Sync**: Upgraded the backup import logic to write directly to Firestore (via `migrateFromLocalStorage`), fixing the issue where imported backups were overwritten by Firestore cloud data on page reload.
+- **⚙️ Version Header Display**: Bumped the visual subtitle version indicator in the application header to dynamically reflect the correct software release (`v1.7.0`).
+
+### Changed
+- **Cache-busting**: Bumped asset tags in `index.html` to `?v=1.7.0` to force browser cache refresh.
+- **Docker Compose**: Bumped the production default image tag in `docker-compose.yml` to `1.7.0`.
+
+### Fixed
+- **🧠 Recommendation Engine Reference Error**: Resolved a `TypeError` on startup caused by the Smart Coach engine accessing `customProgram` directly on the recommendation engine class instead of via the `StateManager` state container.
+
+---
+
 ## [1.6.1] - 2026-06-11
 ### Fixed
 - **UI Sets Render Bug**: Fixed a bug where exercises with 2 prescribed sets (like JM Presses, Cable Flys, and Hammer Curls) rendered with 3 sets in the active logger. It now matches the prescribed target program sets count.
