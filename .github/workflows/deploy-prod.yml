@@ -1,4 +1,4 @@
-name: 🚀 Deploy V-TRACK
+name: 🚀 Deploy V-TRACK (Production)
 
 on:
   push:
@@ -6,13 +6,13 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
+  deploy-prod:
     runs-on: ubuntu-latest
     steps:
       - name: 📥 Checkout Code
         uses: actions/checkout@v4
 
-      - name: 🚀 SSH Deploy
+      - name: 🚀 SSH Prod Deploy
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SERVER_HOST }}
@@ -20,8 +20,10 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd /opt/vtrack
-            git pull origin main
-            # Inject environment variables from GitHub Secrets into .env
+            git fetch origin main
+            git reset --hard origin/main
+            
+            # Inject Prod Environment Variables
             echo "FIREBASE_API_KEY=${{ secrets.FIREBASE_API_KEY }}" > .env
             echo "FIREBASE_AUTH_DOMAIN=${{ secrets.FIREBASE_AUTH_DOMAIN }}" >> .env
             echo "FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID }}" >> .env
@@ -30,7 +32,9 @@ jobs:
             echo "FIREBASE_APP_ID=${{ secrets.FIREBASE_APP_ID }}" >> .env
             echo "SINGLE_USER_EMAIL=${{ secrets.SINGLE_USER_EMAIL }}" >> .env
             echo "SINGLE_USER_PASSWORD=${{ secrets.SINGLE_USER_PASSWORD }}" >> .env
+            echo "CONTAINER_NAME=vtrack-app" >> .env
+            echo "VTRACK_PORT=80" >> .env
+            
             docker compose down
             docker compose build --no-cache
             docker compose up -d
-            docker compose ps

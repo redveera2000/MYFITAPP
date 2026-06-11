@@ -2,10 +2,10 @@ services:
   vtrack:
     build: .
     image: vtrack-app:1.6.1
-    container_name: vtrack-app
+    container_name: ${CONTAINER_NAME:-vtrack-app}
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "${VTRACK_PORT:-80}:80"
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
       interval: 30s

@@ -1,0 +1,69 @@
+name: 🧪 Deploy V-TRACK (Development)
+
+on:
+  push:
+    branches: [ development ]
+  workflow_dispatch:
+
+jobs:
+  deploy-dev:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🚀 SSH Dev Deploy
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            mkdir -p /opt/vtrack-dev
+            cd /opt/vtrack-dev
+            # Initialize git repo on server if it doesn't exist
+            if [ ! -d .git ]; then
+              git clone -b development https://github.com/redveera2000/MYFITAPP.git .
+            fi
+            git fetch origin development
+            git reset --hard origin/development
+            
+            # Setup environment variables using shell fallbacks for dev/prod secrets
+            DEV_KEY="${{ secrets.DEV_FIREBASE_API_KEY }}"
+            PROD_KEY="${{ secrets.FIREBASE_API_KEY }}"
+            echo "FIREBASE_API_KEY=${DEV_KEY:-$PROD_KEY}" > .env
+            
+            DEV_DOMAIN="${{ secrets.DEV_FIREBASE_AUTH_DOMAIN }}"
+            PROD_DOMAIN="${{ secrets.FIREBASE_AUTH_DOMAIN }}"
+            echo "FIREBASE_AUTH_DOMAIN=${DEV_DOMAIN:-$PROD_DOMAIN}" >> .env
+            
+            DEV_ID="${{ secrets.DEV_FIREBASE_PROJECT_ID }}"
+            PROD_ID="${{ secrets.FIREBASE_PROJECT_ID }}"
+            echo "FIREBASE_PROJECT_ID=${DEV_ID:-$PROD_ID}" >> .env
+            
+            DEV_BUCKET="${{ secrets.DEV_FIREBASE_STORAGE_BUCKET }}"
+            PROD_BUCKET="${{ secrets.FIREBASE_STORAGE_BUCKET }}"
+            echo "FIREBASE_STORAGE_BUCKET=${DEV_BUCKET:-$PROD_BUCKET}" >> .env
+            
+            DEV_SENDER="${{ secrets.DEV_FIREBASE_MESSAGING_SENDER_ID }}"
+            PROD_SENDER="${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}"
+            echo "FIREBASE_MESSAGING_SENDER_ID=${DEV_SENDER:-$PROD_SENDER}" >> .env
+            
+            DEV_APP_ID="${{ secrets.DEV_FIREBASE_APP_ID }}"
+            PROD_APP_ID="${{ secrets.FIREBASE_APP_ID }}"
+            echo "FIREBASE_APP_ID=${DEV_APP_ID:-$PROD_APP_ID}" >> .env
+            
+            DEV_EMAIL="${{ secrets.DEV_SINGLE_USER_EMAIL }}"
+            PROD_EMAIL="${{ secrets.SINGLE_USER_EMAIL }}"
+            echo "SINGLE_USER_EMAIL=${DEV_EMAIL:-$PROD_EMAIL}" >> .env
+            
+            DEV_PWD="${{ secrets.DEV_SINGLE_USER_PASSWORD }}"
+            PROD_PWD="${{ secrets.SINGLE_USER_PASSWORD }}"
+            echo "SINGLE_USER_PASSWORD=${DEV_PWD:-$PROD_PWD}" >> .env
+            
+            echo "CONTAINER_NAME=vtrack-app-dev" >> .env
+            echo "VTRACK_PORT=8080" >> .env
+            
+            docker compose down
+            docker compose build --no-cache
+            docker compose up -d
