@@ -19,12 +19,21 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            mkdir -p /opt/vtrack-dev
-            cd /opt/vtrack-dev
-            # Initialize git repo on server if it doesn't exist
-            if [ ! -d .git ]; then
-              git clone -b development https://github.com/redveera2000/MYFITAPP.git .
+            # Bootstrap development folder if it doesn't exist, with sudo fallback
+            if [ ! -d /opt/vtrack-dev ]; then
+              mkdir -p /opt/vtrack-dev || sudo mkdir -p /opt/vtrack-dev
+              sudo chown -R $USER:$USER /opt/vtrack-dev || true
             fi
+            
+            cd /opt/vtrack-dev
+            
+            # If git is not initialized, copy the working git configuration from the production repository
+            if [ ! -d .git ]; then
+              cp -r /opt/vtrack/.git .
+              git fetch origin development
+              git checkout -f development || git checkout -b development origin/development
+            fi
+            
             git fetch origin development
             git reset --hard origin/development
             
