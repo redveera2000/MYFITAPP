@@ -1,7 +1,7 @@
 services:
   vtrack:
     build: .
-    image: vtrack-app:1.6.1
+    image: vtrack-app:1.7.0
     container_name: ${CONTAINER_NAME:-vtrack-app}
     restart: unless-stopped
     ports:
