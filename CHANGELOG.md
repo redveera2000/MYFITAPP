@@ -4,6 +4,13 @@ All notable changes to the AESTHETIX V-TRACK fitness tracker will be documented 
 
 ---
 
+## [1.6.1] - 2026-06-11
+### Fixed
+- **UI Sets Render Bug**: Fixed a bug where exercises with 2 prescribed sets (like JM Presses, Cable Flys, and Hammer Curls) rendered with 3 sets in the active logger. It now matches the prescribed target program sets count.
+- **Cache-busting**: Bumped asset tags to `?v=1.6.1` to force browser cache refresh.
+
+---
+
 ## [1.6.0] - 2026-06-10
 ### Added — Smart Training Coach (Progressive Overload Recommendation System)
 - **🧠 RecommendationEngine Class**: New `RecommendationEngine` in `app.js` with 7 evidence-based detection algorithms for analyzing workout performance:
