@@ -7,7 +7,7 @@ services:
     ports:
       - "${VTRACK_PORT:-80}:80"
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      test: ["CMD", "wget", "-q", "-O-", "http://localhost/"]
       interval: 30s
       timeout: 5s
       retries: 3

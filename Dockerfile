@@ -28,6 +28,6 @@ EXPOSE 80
 
 # Health check to ensure Nginx is healthy for the fitness tracker
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost/ || exit 1
+  CMD wget -q -O- http://localhost/ > /dev/null || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]
