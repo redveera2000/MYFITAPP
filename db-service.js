@@ -558,8 +558,12 @@ class FirestoreService {
     }
 
     // Check if all exercises from the program are logged
-    if (typeof DEFAULT_PROGRAM !== 'undefined' && DEFAULT_PROGRAM[sessionData.workoutKey]) {
-      const programExCount = DEFAULT_PROGRAM[sessionData.workoutKey].exercises.length;
+    const program = (typeof appState !== 'undefined' && appState.customProgram)
+      ? appState.customProgram[sessionData.workoutKey]
+      : ((typeof DEFAULT_PROGRAM !== 'undefined') ? DEFAULT_PROGRAM[sessionData.workoutKey] : null);
+
+    if (program) {
+      const programExCount = program.exercises.length;
       const loggedExCount = sessionData.exercises.filter(ex =>
         ex.sets && ex.sets.some(s => s.reps !== null && s.reps !== undefined && s.reps !== "")
       ).length;

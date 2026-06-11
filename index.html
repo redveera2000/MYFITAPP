@@ -445,6 +445,84 @@ function doGet() {
       </div>
     </div>
   </div>
+  <!-- Add Custom Exercise Modal -->
+  <div id="add-exercise-modal" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Add New Exercise</h3>
+        <button id="add-exercise-close-btn" class="delete-history-btn" style="font-size: 24px;">&times;</button>
+      </div>
+      <form id="add-exercise-form" novalidate>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="add-ex-name">Exercise Name</label>
+            <input type="text" id="add-ex-name" class="form-control" placeholder="e.g. Incline Dumbbell Flys" required>
+          </div>
+          
+          <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px;">
+            <div class="form-group" style="flex: 1;">
+              <label for="add-ex-day">Target Training Day</label>
+              <select id="add-ex-day" class="form-control" required>
+                <option value="push1">Push Day 1</option>
+                <option value="pull1">Pull Day 1</option>
+                <option value="legs1">Leg Day 1</option>
+                <option value="push2">Push Day 2</option>
+                <option value="pull2">Pull Day 2</option>
+                <option value="legs2">Leg Day 2</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex: 1;">
+              <label for="add-ex-type">Equipment Type</label>
+              <select id="add-ex-type" class="form-control" required>
+                <option value="dumbbell">Dumbbell</option>
+                <option value="barbell">Barbell</option>
+                <option value="cable">Cable</option>
+                <option value="machine">Machine</option>
+                <option value="bodyweight">Bodyweight</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px;">
+            <div class="form-group" style="flex: 1;">
+              <label for="add-ex-sets">Sets Count</label>
+              <input type="number" id="add-ex-sets" class="form-control" value="3" min="1" max="10" required>
+            </div>
+            <div class="form-group" style="flex: 1;">
+              <label for="add-ex-weight">Starting Weight (kg)</label>
+              <input type="number" id="add-ex-weight" class="form-control" value="10" step="0.5" min="0" required>
+            </div>
+          </div>
+
+          <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px;">
+            <div class="form-group" style="flex: 1;">
+              <label for="add-ex-minreps">Min Reps</label>
+              <input type="number" id="add-ex-minreps" class="form-control" value="8" min="1" required>
+            </div>
+            <div class="form-group" style="flex: 1;">
+              <label for="add-ex-maxreps">Max Reps</label>
+              <input type="number" id="add-ex-maxreps" class="form-control" value="12" min="1" required>
+            </div>
+          </div>
+
+          <div class="form-row" style="display: flex; gap: 15px; margin-bottom: 15px; align-items: center;">
+            <div class="form-group" style="flex: 1;">
+              <label for="add-ex-rest">Rest Time (seconds)</label>
+              <input type="number" id="add-ex-rest" class="form-control" value="90" step="10" min="10" required>
+            </div>
+            <div class="form-group" style="flex: 1; display: flex; align-items: center; gap: 8px; margin-top: 20px;">
+              <input type="checkbox" id="add-ex-failure" style="width: 18px; height: 18px; cursor: pointer;">
+              <label for="add-ex-failure" style="margin: 0; cursor: pointer; font-size: 13.5px; font-weight: normal; color: var(--text-secondary);">Failure Only (Bodyweight)</label>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer" style="display: flex; gap: 15px; justify-content: flex-end;">
+          <button type="button" id="add-ex-cancel-btn" class="btn btn-secondary" style="max-width: 100px;">Cancel</button>
+          <button type="submit" class="btn" style="max-width: 140px;">Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
   <!-- Fullscreen Login Access Gateway -->
   <div id="login-container" class="login-overlay" style="display: flex;">
     <div class="login-card glass-panel animate-fade-in">

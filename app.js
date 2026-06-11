@@ -103,6 +103,18 @@ class StateManager {
       this.profile.sheetsUrl = "";
     }
 
+    // Initialize Custom Program
+    const customProgramJson = localStorage.getItem(this.keyPrefix + "custom_program");
+    if (customProgramJson) {
+      this.customProgram = JSON.parse(customProgramJson);
+    } else if (this.profile && this.profile.customProgram) {
+      this.customProgram = this.profile.customProgram;
+      localStorage.setItem(this.keyPrefix + "custom_program", JSON.stringify(this.customProgram));
+    } else {
+      this.customProgram = JSON.parse(JSON.stringify(DEFAULT_PROGRAM));
+      localStorage.setItem(this.keyPrefix + "custom_program", JSON.stringify(this.customProgram));
+    }
+
     // Initialize Weight Logs
     this.weightLogs = weightLogs ? JSON.parse(weightLogs) : [
       { date: "2026-06-06", weight: 112.8 }
@@ -113,8 +125,8 @@ class StateManager {
       this.currentWeights = JSON.parse(weights);
     } else {
       this.currentWeights = {};
-      Object.keys(DEFAULT_PROGRAM).forEach(dayKey => {
-        DEFAULT_PROGRAM[dayKey].exercises.forEach(ex => {
+      Object.keys(this.customProgram).forEach(dayKey => {
+        this.customProgram[dayKey].exercises.forEach(ex => {
           this.currentWeights[ex.name] = {
             weight: ex.defaultWeight,
             minReps: ex.minReps,
@@ -263,6 +275,10 @@ class StateManager {
       const cloudProfile = await firestoreService.loadProfile();
       if (cloudProfile) {
         this.profile = { ...this.profile, ...cloudProfile };
+        if (cloudProfile.customProgram) {
+          this.customProgram = cloudProfile.customProgram;
+          localStorage.setItem(this.keyPrefix + "custom_program", JSON.stringify(this.customProgram));
+        }
         this.saveProfile();
       }
 
@@ -306,6 +322,7 @@ class StateManager {
   }
 
   saveProfile() {
+    this.profile.customProgram = this.customProgram;
     localStorage.setItem(this.keyPrefix + "profile", JSON.stringify(this.profile));
     // Dual-write to Firestore
     if (this.firebaseInitialized && firestoreService && firestoreService.isReady()) {
@@ -334,7 +351,7 @@ class StateManager {
       id: Date.now().toString(),
       date: dateStr,
       workoutKey: workoutKey,
-      workoutName: DEFAULT_PROGRAM[workoutKey].name,
+      workoutName: this.customProgram[workoutKey].name,
       exercises: loggedExercises
     };
 
@@ -444,6 +461,50 @@ class StateManager {
     };
   }
 
+  addCustomExercise(dayKey, name, sets, minReps, maxReps, weight, type, failureOnly, restSeconds) {
+    const sanitizedName = name.trim();
+    let exists = false;
+    Object.keys(this.customProgram).forEach(key => {
+      const found = this.customProgram[key].exercises.some(ex => ex.name.toLowerCase() === sanitizedName.toLowerCase());
+      if (found) exists = true;
+    });
+
+    if (exists) {
+      alert(`An exercise named "${sanitizedName}" already exists in the routine program.`);
+      return false;
+    }
+
+    // 1. Add to custom program config
+    this.customProgram[dayKey].exercises.push({
+      name: sanitizedName,
+      sets: sets,
+      minReps: minReps,
+      maxReps: maxReps,
+      defaultWeight: weight,
+      type: type,
+      category: "hypertrophy",
+      restSeconds: restSeconds,
+      failureOnly: failureOnly
+    });
+
+    // 2. Initialize in currentWeights
+    this.currentWeights[sanitizedName] = {
+      weight: weight,
+      minReps: minReps,
+      maxReps: maxReps,
+      sets: sets,
+      type: type,
+      failureOnly: failureOnly
+    };
+
+    // 3. Save profile and weights (which syncs to Cloud Firestore automatically)
+    this.saveProfile();
+    this.saveWeights();
+    
+    console.log(`[Program] Custom exercise added: ${sanitizedName} on ${dayKey}`);
+    return true;
+  }
+
   // Check if an exercise has already been logged for a specific date/session
   isExerciseLogged(workoutKey, dateStr, exName) {
     const record = this.history.find(log => log.date === dateStr && log.workoutKey === workoutKey);
@@ -490,7 +551,7 @@ class StateManager {
         id: Date.now().toString(),
         date: dateStr,
         workoutKey: workoutKey,
-        workoutName: DEFAULT_PROGRAM[workoutKey].name,
+        workoutName: this.customProgram[workoutKey].name,
         exercises: []
       };
       this.history.push(record);
@@ -917,8 +978,8 @@ class RecommendationEngine {
    * Helper: Get rest period for an exercise from program config
    */
   _getRestForExercise(exName) {
-    for (const dayKey of Object.keys(DEFAULT_PROGRAM)) {
-      const ex = DEFAULT_PROGRAM[dayKey].exercises.find(e => e.name === exName);
+    for (const dayKey of Object.keys(this.customProgram)) {
+      const ex = this.customProgram[dayKey].exercises.find(e => e.name === exName);
       if (ex) {
         const secs = ex.restSeconds || 90;
         if (secs >= 60) {
@@ -977,8 +1038,8 @@ class RecommendationEngine {
   generateDashboardAlerts() {
     const allAlerts = [];
 
-    Object.keys(DEFAULT_PROGRAM).forEach(dayKey => {
-      DEFAULT_PROGRAM[dayKey].exercises.forEach(ex => {
+    Object.keys(this.customProgram).forEach(dayKey => {
+      this.customProgram[dayKey].exercises.forEach(ex => {
         if (ex.failureOnly) return;
 
         const history = this.getExerciseHistory(ex.name, dayKey);
@@ -1023,6 +1084,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initWorkoutSelector();
   renderCalorieWidget();
   renderPlanList();
+  setupAddExerciseModal();
   renderHistoryTable();
   buildCharts();
   
@@ -1455,12 +1517,12 @@ function initWorkoutSelector() {
 
   // Clear and rebuild options
   selector.innerHTML = "";
-  Object.keys(DEFAULT_PROGRAM).forEach(key => {
-    const opt = document.createElement("option");
-    opt.value = key;
-    opt.textContent = DEFAULT_PROGRAM[key].name;
-    selector.appendChild(opt);
-  });
+  Object.keys(appState.customProgram).forEach(key => {
+     const opt = document.createElement("option");
+     opt.value = key;
+     opt.textContent = appState.customProgram[key].name;
+     selector.appendChild(opt);
+   });
 
   selector.value = activeWorkoutKey;
   selector.addEventListener("change", (e) => {
@@ -1567,7 +1629,7 @@ function renderActiveWorkout() {
   updateWorkoutStatusBadge();
  
   container.innerHTML = "";
-  const program = DEFAULT_PROGRAM[activeWorkoutKey];
+  const program = appState.customProgram[activeWorkoutKey];
   
   const wDate = document.getElementById("workout-date");
   const dateStr = wDate ? wDate.value : getLocalDateString();
@@ -1711,7 +1773,7 @@ function updateWorkoutStatusBadge() {
 
   const wDate = document.getElementById("workout-date");
   const dateStr = wDate ? wDate.value : getLocalDateString();
-  const program = DEFAULT_PROGRAM[activeWorkoutKey];
+  const program = appState.customProgram[activeWorkoutKey];
   if (!program) {
     badge.style.display = "none";
     return;
@@ -2015,6 +2077,102 @@ function showOverloadModal(report, coachAlerts) {
   }
 }
 
+function openAddExerciseModal(dayKey) {
+  const modal = document.getElementById("add-exercise-modal");
+  const daySelect = document.getElementById("add-ex-day");
+  if (!modal || !daySelect) return;
+
+  // Pre-select the training day
+  daySelect.value = dayKey;
+  modal.classList.add("show");
+}
+
+function closeAddExerciseModal() {
+  const modal = document.getElementById("add-exercise-modal");
+  const form = document.getElementById("add-exercise-form");
+  if (modal) {
+    modal.classList.remove("show");
+  }
+  if (form) {
+    form.reset();
+  }
+}
+
+function setupAddExerciseModal() {
+  const form = document.getElementById("add-exercise-form");
+  const closeBtn = document.getElementById("add-exercise-close-btn");
+  const cancelBtn = document.getElementById("add-ex-cancel-btn");
+
+  if (closeBtn) {
+    closeBtn.addEventListener("click", closeAddExerciseModal);
+  }
+  if (cancelBtn) {
+    cancelBtn.addEventListener("click", closeAddExerciseModal);
+  }
+
+  if (form) {
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+
+      const name = document.getElementById("add-ex-name").value;
+      const dayKey = document.getElementById("add-ex-day").value;
+      const type = document.getElementById("add-ex-type").value;
+      const sets = parseInt(document.getElementById("add-ex-sets").value, 10);
+      const weight = parseFloat(document.getElementById("add-ex-weight").value);
+      const minReps = parseInt(document.getElementById("add-ex-minreps").value, 10);
+      const maxReps = parseInt(document.getElementById("add-ex-maxreps").value, 10);
+      const restSeconds = parseInt(document.getElementById("add-ex-rest").value, 10);
+      const failureOnly = document.getElementById("add-ex-failure").checked;
+
+      // Validation
+      if (!name.trim()) {
+        alert("Please enter a valid exercise name.");
+        return;
+      }
+      if (isNaN(sets) || sets < 1) {
+        alert("Please enter a valid sets count (minimum 1).");
+        return;
+      }
+      if (isNaN(weight) || weight < 0) {
+        alert("Please enter a valid starting weight (minimum 0).");
+        return;
+      }
+      if (isNaN(minReps) || minReps < 1) {
+        alert("Please enter a valid minimum reps value.");
+        return;
+      }
+      if (isNaN(maxReps) || maxReps < minReps) {
+        alert("Please enter a valid maximum reps value (greater than or equal to min reps).");
+        return;
+      }
+      if (isNaN(restSeconds) || restSeconds < 10) {
+        alert("Please enter a valid rest duration (minimum 10 seconds).");
+        return;
+      }
+
+      // Add exercise to StateManager
+      const success = appState.addCustomExercise(
+        dayKey,
+        name,
+        sets,
+        minReps,
+        maxReps,
+        weight,
+        type,
+        failureOnly,
+        restSeconds
+      );
+
+      if (success) {
+        closeAddExerciseModal();
+        renderPlanList(); // Re-render plan view
+        renderActiveWorkout(); // Re-render active workout view (in case it is the current day)
+        alert(`Successfully added "${name}" to your routine!`);
+      }
+    });
+  }
+}
+
 // 6. Plan & Current Weights Overview Renderer
 function renderPlanList() {
   const container = document.getElementById("plan-overview-container");
@@ -2022,8 +2180,8 @@ function renderPlanList() {
 
   container.innerHTML = "";
 
-  Object.keys(DEFAULT_PROGRAM).forEach(key => {
-    const day = DEFAULT_PROGRAM[key];
+  Object.keys(appState.customProgram).forEach(key => {
+    const day = appState.customProgram[key];
     const section = document.createElement("div");
     section.className = "plan-day-section glass-panel";
 
@@ -2058,8 +2216,11 @@ function renderPlanList() {
     });
 
     section.innerHTML = `
-      <div class="plan-day-header">
+      <div class="plan-day-header" style="display: flex; justify-content: space-between; align-items: center; gap: 15px;">
         <h3>${day.name}</h3>
+        <button class="btn btn-secondary open-add-ex-modal-btn" data-day-key="${key}" style="font-size: 11px; padding: 4px 8px; max-width: 110px; margin: 0;">
+          + Add Exercise
+        </button>
       </div>
       <table class="plan-day-table">
         <thead>
@@ -2096,6 +2257,15 @@ function renderPlanList() {
         e.target.style.borderColor = "#66FCF1";
         setTimeout(() => e.target.style.borderColor = "", 1000);
       }
+    });
+  });
+
+  // Setup open modal buttons listener
+  const openModalBtns = container.querySelectorAll(".open-add-ex-modal-btn");
+  openModalBtns.forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const dayKey = e.currentTarget.getAttribute("data-day-key");
+      openAddExerciseModal(dayKey);
     });
   });
 }
