@@ -103,14 +103,25 @@ class StateManager {
       this.profile.sheetsUrl = "";
     }
 
-    // Initialize Custom Program
+    // Initialize Custom Program with defensive validation
+    let loadedProgram = null;
     const customProgramJson = localStorage.getItem(this.keyPrefix + "custom_program");
-    if (customProgramJson) {
-      this.customProgram = JSON.parse(customProgramJson);
-    } else if (this.profile && this.profile.customProgram) {
-      this.customProgram = this.profile.customProgram;
-      localStorage.setItem(this.keyPrefix + "custom_program", JSON.stringify(this.customProgram));
+    if (customProgramJson && customProgramJson !== "null" && customProgramJson !== "undefined") {
+      try {
+        loadedProgram = JSON.parse(customProgramJson);
+      } catch (e) {
+        console.error("Failed to parse custom program from local storage:", e);
+      }
+    }
+    if (!loadedProgram && this.profile && this.profile.customProgram) {
+      loadedProgram = this.profile.customProgram;
+    }
+    const requiredKeys = ["push1", "pull1", "legs1", "push2", "pull2", "legs2"];
+    const isValidProgram = loadedProgram && typeof loadedProgram === "object" && requiredKeys.every(k => loadedProgram[k] && Array.isArray(loadedProgram[k].exercises));
+    if (isValidProgram) {
+      this.customProgram = loadedProgram;
     } else {
+      console.warn("Custom program missing or invalid. Falling back to default program.");
       this.customProgram = JSON.parse(JSON.stringify(DEFAULT_PROGRAM));
       localStorage.setItem(this.keyPrefix + "custom_program", JSON.stringify(this.customProgram));
     }
@@ -276,8 +287,14 @@ class StateManager {
       if (cloudProfile) {
         this.profile = { ...this.profile, ...cloudProfile };
         if (cloudProfile.customProgram) {
-          this.customProgram = cloudProfile.customProgram;
-          localStorage.setItem(this.keyPrefix + "custom_program", JSON.stringify(this.customProgram));
+          const requiredKeys = ["push1", "pull1", "legs1", "push2", "pull2", "legs2"];
+          const isCloudValid = typeof cloudProfile.customProgram === "object" && requiredKeys.every(k => cloudProfile.customProgram[k] && Array.isArray(cloudProfile.customProgram[k].exercises));
+          if (isCloudValid) {
+            this.customProgram = cloudProfile.customProgram;
+            localStorage.setItem(this.keyPrefix + "custom_program", JSON.stringify(this.customProgram));
+          } else {
+            console.warn("Cloud custom program structure is invalid. Skipping sync.");
+          }
         }
         this.saveProfile();
       }
@@ -978,7 +995,9 @@ class RecommendationEngine {
    * Helper: Get rest period for an exercise from program config
    */
   _getRestForExercise(exName) {
+    if (!this.state.customProgram) return '90s';
     for (const dayKey of Object.keys(this.state.customProgram)) {
+      if (!this.state.customProgram[dayKey] || !this.state.customProgram[dayKey].exercises) continue;
       const ex = this.state.customProgram[dayKey].exercises.find(e => e.name === exName);
       if (ex) {
         const secs = ex.restSeconds || 90;
@@ -1037,8 +1056,13 @@ class RecommendationEngine {
    */
   generateDashboardAlerts() {
     const allAlerts = [];
+    if (!this.state.customProgram) {
+      console.warn("generateDashboardAlerts: customProgram is not initialized.");
+      return [];
+    }
 
     Object.keys(this.state.customProgram).forEach(dayKey => {
+      if (!this.state.customProgram[dayKey] || !this.state.customProgram[dayKey].exercises) return;
       this.state.customProgram[dayKey].exercises.forEach(ex => {
         if (ex.failureOnly) return;
 
@@ -1517,12 +1541,14 @@ function initWorkoutSelector() {
 
   // Clear and rebuild options
   selector.innerHTML = "";
-  Object.keys(appState.customProgram).forEach(key => {
-     const opt = document.createElement("option");
-     opt.value = key;
-     opt.textContent = appState.customProgram[key].name;
-     selector.appendChild(opt);
-   });
+  if (appState.customProgram) {
+    Object.keys(appState.customProgram).forEach(key => {
+      const opt = document.createElement("option");
+      opt.value = key;
+      opt.textContent = appState.customProgram[key].name;
+      selector.appendChild(opt);
+    });
+  }
 
   selector.value = activeWorkoutKey;
   selector.addEventListener("change", (e) => {
@@ -1629,6 +1655,7 @@ function renderActiveWorkout() {
   updateWorkoutStatusBadge();
  
   container.innerHTML = "";
+  if (!appState.customProgram || !appState.customProgram[activeWorkoutKey]) return;
   const program = appState.customProgram[activeWorkoutKey];
   
   const wDate = document.getElementById("workout-date");
@@ -1773,7 +1800,7 @@ function updateWorkoutStatusBadge() {
 
   const wDate = document.getElementById("workout-date");
   const dateStr = wDate ? wDate.value : getLocalDateString();
-  const program = appState.customProgram[activeWorkoutKey];
+  const program = (appState.customProgram && appState.customProgram[activeWorkoutKey]) ? appState.customProgram[activeWorkoutKey] : null;
   if (!program) {
     badge.style.display = "none";
     return;
@@ -2179,6 +2206,8 @@ function renderPlanList() {
   if (!container) return;
 
   container.innerHTML = "";
+
+  if (!appState.customProgram) return;
 
   Object.keys(appState.customProgram).forEach(key => {
     const day = appState.customProgram[key];

@@ -4,6 +4,16 @@ All notable changes to the AESTHETIX V-TRACK fitness tracker will be documented 
 
 ---
 
+## [1.7.1] - 2026-06-11
+### Fixed
+- **🛡️ Secure Access Gateway Boot Flow**: Added robust defensive structural validation and loading guards for `customProgram` mapping. This prevents corrupt local storage state or uninitialized cache properties from triggering a fatal `TypeError` on boot, resolving the login gate initialization block.
+
+### Changed
+- **Cache-busting**: Bumped all frontend asset query parameters to `?v=1.7.1` to force browser cache reload.
+- **Docker Compose**: Bumped production container reference to `1.7.1`.
+
+---
+
 ## [1.7.0] - 2026-06-11
 ### Added
 - **🏋️‍♂️ Dynamic Routine Customizer**: Users can now add new custom exercises dynamically to any Push/Pull/Legs training day via a modal form on the Program tab.
