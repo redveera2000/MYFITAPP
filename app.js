@@ -1625,7 +1625,7 @@ function renderActiveWorkout() {
     }
 
     let setsHtml = "";
-    const numSets = savedSets ? savedSets.length : 3; // use saved length or default 3 sets
+    const numSets = savedSets ? savedSets.length : trackerState.sets; // use saved length or target sets
     for (let s = 1; s <= numSets; s++) {
       const { targetReps, lastRepsText } = getTargetRepsForSet(ex.name, s - 1);
       
