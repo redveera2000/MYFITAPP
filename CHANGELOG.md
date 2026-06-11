@@ -4,6 +4,17 @@ All notable changes to the AESTHETIX V-TRACK fitness tracker will be documented 
 
 ---
 
+## [1.7.2] - 2026-06-11
+### Added
+- **❌ Routine Exercise Deletion**: Added a "Remove Exercise" action button (subtle red glassmorphic design) to each exercise row in the **Workout Program & Baselines** tab. Deleting an exercise removes it from future logs without altering past history records.
+- **🗑️ Active Session Discarding**: Added a "Discard Session" option in the **Workout Dashboard** active logger. Users can now clear/delete all logged sets for the selected date and session in one click, syncing deletions to Cloud Firestore.
+
+### Changed
+- **Cache-busting**: Bumped all asset imports in `index.html` to `?v=1.7.2` to force cache refresh.
+- **Docker Compose**: Bumped default production docker image tag to `1.7.2`.
+
+---
+
 ## [1.7.1] - 2026-06-11
 ### Fixed
 - **🛡️ Secure Access Gateway Boot Flow**: Added robust defensive structural validation and loading guards for `customProgram` mapping. This prevents corrupt local storage state or uninitialized cache properties from triggering a fatal `TypeError` on boot, resolving the login gate initialization block.

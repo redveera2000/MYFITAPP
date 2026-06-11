@@ -139,6 +139,21 @@ class FirestoreService {
   }
 
   /**
+   * Delete an exercise target from cloud database
+   */
+  async deleteExerciseTarget(exerciseName) {
+    if (!this.isReady()) return;
+    try {
+      const docId = this._sanitizeDocId(exerciseName);
+      await this.db.collection('users').doc(this.uid)
+        .collection('exercise_targets').doc(docId).delete();
+      console.log(`[DB] Exercise target deleted: ${exerciseName}`);
+    } catch (error) {
+      console.error(`[DB] Error deleting exercise target ${exerciseName}:`, error);
+    }
+  }
+
+  /**
    * Load all exercise targets from Firestore
    * @returns {Object} Map of exerciseName → target data (same format as localStorage)
    */

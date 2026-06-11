@@ -522,6 +522,45 @@ class StateManager {
     return true;
   }
 
+  removeExerciseFromPlan(dayKey, exName) {
+    if (!this.customProgram || !this.customProgram[dayKey]) {
+      console.error(`[Program] Invalid dayKey: ${dayKey}`);
+      return false;
+    }
+
+    // 1. Filter out the exercise from custom program config
+    const originalCount = this.customProgram[dayKey].exercises.length;
+    this.customProgram[dayKey].exercises = this.customProgram[dayKey].exercises.filter(
+      ex => ex.name !== exName
+    );
+
+    if (this.customProgram[dayKey].exercises.length === originalCount) {
+      console.warn(`[Program] Exercise "${exName}" not found on day ${dayKey}`);
+      return false;
+    }
+
+    // 2. Remove from currentWeights to keep schema clean (only if not used in other days)
+    let isUsedElsewhere = false;
+    Object.keys(this.customProgram).forEach(key => {
+      if (this.customProgram[key].exercises.some(ex => ex.name === exName)) {
+        isUsedElsewhere = true;
+      }
+    });
+
+    if (!isUsedElsewhere && this.currentWeights[exName]) {
+      delete this.currentWeights[exName];
+      this.saveWeights();
+      if (this.firebaseInitialized && firestoreService && firestoreService.isReady()) {
+        firestoreService.deleteExerciseTarget(exName).catch(err => console.error('[Sync] Target delete error:', err));
+      }
+    }
+
+    // 3. Save profile and sync to cloud
+    this.saveProfile();
+    console.log(`[Program] Exercise removed: ${exName} from ${dayKey}`);
+    return true;
+  }
+
   // Check if an exercise has already been logged for a specific date/session
   isExerciseLogged(workoutKey, dateStr, exName) {
     const record = this.history.find(log => log.date === dateStr && log.workoutKey === workoutKey);
@@ -1109,6 +1148,7 @@ document.addEventListener("DOMContentLoaded", () => {
   renderCalorieWidget();
   renderPlanList();
   setupAddExerciseModal();
+  setupDiscardSessionHandler();
   renderHistoryTable();
   buildCharts();
   
@@ -1813,8 +1853,11 @@ function updateWorkoutStatusBadge() {
     }
   });
 
+  const discardBtn = document.getElementById("discard-session-btn");
+
   if (savedCount === 0) {
     badge.style.display = "none";
+    if (discardBtn) discardBtn.style.display = "none";
   } else if (savedCount === program.exercises.length) {
     badge.style.display = "inline-flex";
     badge.style.background = "rgba(46, 204, 113, 0.15)";
@@ -1823,6 +1866,7 @@ function updateWorkoutStatusBadge() {
     badge.style.alignItems = "center";
     badge.style.justifyContent = "center";
     badge.textContent = "COMPLETED ✓";
+    if (discardBtn) discardBtn.style.display = "inline-flex";
   } else {
     badge.style.display = "inline-flex";
     badge.style.background = "rgba(241, 196, 15, 0.15)";
@@ -1831,7 +1875,39 @@ function updateWorkoutStatusBadge() {
     badge.style.alignItems = "center";
     badge.style.justifyContent = "center";
     badge.textContent = "IN PROGRESS";
+    if (discardBtn) discardBtn.style.display = "inline-flex";
   }
+}
+
+function setupDiscardSessionHandler() {
+  const discardBtn = document.getElementById("discard-session-btn");
+  if (!discardBtn) return;
+
+  discardBtn.addEventListener("click", () => {
+    const wDate = document.getElementById("workout-date");
+    const dateStr = wDate ? wDate.value : getLocalDateString();
+    
+    const program = appState.customProgram ? appState.customProgram[activeWorkoutKey] : null;
+    const sessionName = program ? program.name : "this session";
+    
+    if (confirm(`Are you sure you want to discard all logged exercises for ${sessionName} on ${dateStr}? This will completely delete this workout session from your logs and history.`)) {
+      const record = appState.history.find(log => log.date === dateStr && log.workoutKey === activeWorkoutKey);
+      if (record) {
+        if (appState.firebaseInitialized && firestoreService && firestoreService.isReady()) {
+          firestoreService.deleteWorkoutSession(record.id).catch(err => console.error('[Sync] Discard session error:', err));
+        }
+        appState.history = appState.history.filter(log => log.id !== record.id);
+        appState.saveHistory();
+      }
+      
+      renderActiveWorkout();
+      renderHistoryTable();
+      buildCharts();
+      renderPlanList();
+      
+      alert("Workout session discarded successfully.");
+    }
+  });
 }
 
 function submitLoggedWorkout() {
@@ -2240,6 +2316,9 @@ function renderPlanList() {
               <span class="unit">kg</span>
             </div>
           </td>
+          <td data-label="Action" style="text-align: center;">
+            <button class="delete-ex-btn" data-day-key="${key}" data-ex-name="${ex.name}" title="Remove Exercise">&times;</button>
+          </td>
         </tr>
       `;
     });
@@ -2260,6 +2339,7 @@ function renderPlanList() {
             <th>Rep Range</th>
             <th>Rest</th>
             <th>Target Weight</th>
+            <th style="width: 80px; text-align: center;">Action</th>
           </tr>
         </thead>
         <tbody>
@@ -2295,6 +2375,22 @@ function renderPlanList() {
     btn.addEventListener("click", (e) => {
       const dayKey = e.currentTarget.getAttribute("data-day-key");
       openAddExerciseModal(dayKey);
+    });
+  });
+
+  // Setup delete exercise buttons listener
+  const deleteBtns = container.querySelectorAll(".delete-ex-btn");
+  deleteBtns.forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const dayKey = e.target.getAttribute("data-day-key");
+      const exName = e.target.getAttribute("data-ex-name");
+      if (confirm(`Are you sure you want to remove "${exName}" from the ${appState.customProgram[dayKey].name} routine? This will not delete your workout history logs for this exercise, but will remove it from future sessions.`)) {
+        const success = appState.removeExerciseFromPlan(dayKey, exName);
+        if (success) {
+          renderPlanList();
+          renderActiveWorkout();
+        }
+      }
     });
   });
 }

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AESTHETIX // Premium Workout Tracker & Progressive Overload Engine</title>
   <meta name="description" content="Personalized fitness tracker and progressive overload assistant for Veeradinesh's 6-day workout split, optimized for strength training and body composition.">
-  <link rel="stylesheet" href="index.css?v=1.7.1">
+  <link rel="stylesheet" href="index.css?v=1.7.2">
   <!-- Firebase SDK (CDN Compat - No bundler required) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -22,7 +22,7 @@
       <div class="brand-wrapper">
         <div class="brand-logo">Aesthetix</div>
         <div>
-          <span class="brand-subtitle">V-Track Engine v1.7.1</span>
+          <span class="brand-subtitle">V-Track Engine v1.7.2</span>
         </div>
       </div>
       <div class="user-quick-profile">
@@ -155,9 +155,10 @@
           <div class="log-setup-row">
             <div class="setup-col">
               <label for="workout-select" style="font-weight:600; color: var(--accent-primary);">Workout Session:</label>
-              <div style="display: flex; align-items: center; gap: 8px;">
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                 <select id="workout-select" class="form-control" style="width: auto;"></select>
                 <span id="workout-status-badge" style="display: none; font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 12px; font-family: var(--font-display); letter-spacing: 0.5px;"></span>
+                <button id="discard-session-btn" class="btn btn-danger-outline" style="display: none; font-size: 11px; padding: 4px 8px; margin: 0; line-height: 1.4;" title="Completely clear logs for this date">Discard Session</button>
               </div>
             </div>
             <div class="setup-col">
@@ -566,9 +567,9 @@ function doGet() {
   </div>
 
   <!-- Firebase Configuration & Database Service -->
-  <script src="firebase-config.js?v=1.7.1"></script>
-  <script src="db-service.js?v=1.7.1"></script>
+  <script src="firebase-config.js?v=1.7.2"></script>
+  <script src="db-service.js?v=1.7.2"></script>
   <!-- Link App Script -->
-  <script src="app.js?v=1.7.1"></script>
+  <script src="app.js?v=1.7.2"></script>
 </body>
 </html>
