@@ -2318,14 +2318,28 @@ function importData(event) {
   if (!file) return;
 
   const reader = new FileReader();
-  reader.onload = function(e) {
+  reader.onload = async function(e) {
     try {
       const data = JSON.parse(e.target.result);
       if (data.profile && data.currentWeights && data.history && data.weightLogs) {
+        // Clear input value so the same file can be selected again
+        event.target.value = '';
+
+        // Save to localStorage
         localStorage.setItem(appState.keyPrefix + "profile", JSON.stringify(data.profile));
         localStorage.setItem(appState.keyPrefix + "current_weights", JSON.stringify(data.currentWeights));
         localStorage.setItem(appState.keyPrefix + "history", JSON.stringify(data.history));
         localStorage.setItem(appState.keyPrefix + "weight_logs", JSON.stringify(data.weightLogs));
+        
+        // Sync to Firestore if logged in
+        if (appState.firebaseInitialized && firestoreService && firestoreService.isReady()) {
+          console.log('[Import] Syncing imported backup to Firestore...');
+          const success = await firestoreService.migrateFromLocalStorage(data);
+          if (!success) {
+            alert("Local storage updated, but failed to sync backup data to Firestore.");
+            return;
+          }
+        }
         
         alert("Import successful! Reloading tracker state.");
         location.reload();
@@ -2333,6 +2347,7 @@ function importData(event) {
         alert("Invalid backup file format. Import failed.");
       }
     } catch(err) {
+      console.error('[Import Error]', err);
       alert("Error parsing file. Ensure it is a valid backup JSON.");
     }
   };
