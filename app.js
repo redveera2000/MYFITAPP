@@ -1133,6 +1133,137 @@ class RecommendationEngine {
       return true;
     });
   }
+
+  /**
+   * Analyze Progressive Overload Volume for the last N sessions.
+   * Returns data for charting and a trend classification.
+   */
+  analyzeVolumeTrend(lastN = 8) {
+    if (!this.state.history || this.state.history.length === 0) {
+      return { labels: [], data: [], trend: 'insufficient_data' };
+    }
+
+    const sortedLogs = [...this.state.history].sort((a, b) => new Date(a.date) - new Date(b.date));
+    const recentLogs = sortedLogs.slice(-lastN);
+
+    const labels = [];
+    const data = [];
+
+    recentLogs.forEach(log => {
+      let totalVolume = 0;
+      log.exercises.forEach(ex => {
+        if (ex.sets) {
+          ex.sets.forEach(set => {
+            if (set.reps && set.weight) {
+              totalVolume += (set.reps * set.weight);
+            }
+          });
+        }
+      });
+      
+      const dateShort = new Date(log.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      labels.push(`${log.workoutName} (${dateShort})`);
+      data.push(totalVolume);
+    });
+
+    let trend = 'flat';
+    if (data.length >= 3) {
+      const firstHalfAvg = data.slice(0, Math.floor(data.length / 2)).reduce((a, b) => a + b, 0) / Math.floor(data.length / 2);
+      const secondHalfAvg = data.slice(Math.floor(data.length / 2)).reduce((a, b) => a + b, 0) / Math.ceil(data.length / 2);
+      
+      if (secondHalfAvg > firstHalfAvg * 1.05) trend = 'increasing';
+      else if (secondHalfAvg < firstHalfAvg * 0.95) trend = 'decreasing';
+    }
+
+    return { labels, data, trend };
+  }
+
+  /**
+   * Analyze recovery and CNS fatigue based on consecutive days trained
+   * and specific heavy sessions (Leg Days).
+   */
+  analyzeRecoveryStatus() {
+    if (!this.state.history || this.state.history.length === 0) {
+      return { severity: 'info', icon: '✅', title: 'Fresh Start', desc: 'Ready to train. Go crush your workout!' };
+    }
+
+    const sortedLogs = [...this.state.history].sort((a, b) => new Date(a.date) - new Date(b.date));
+    const lastLog = sortedLogs[sortedLogs.length - 1];
+    
+    // Calculate consecutive days
+    let consecutiveDays = 1;
+    for (let i = sortedLogs.length - 2; i >= 0; i--) {
+      const d1 = new Date(sortedLogs[i+1].date);
+      const d2 = new Date(sortedLogs[i].date);
+      const diffTime = Math.abs(d1 - d2);
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      if (diffDays === 1) {
+        consecutiveDays++;
+      } else if (diffDays === 0) {
+        // Same day log, ignore in consecutive days count
+      } else {
+        break; // Gap found
+      }
+    }
+
+    const lastLogDate = new Date(lastLog.date);
+    const today = new Date();
+    const daysSinceLastWorkout = Math.floor((today - lastLogDate) / (1000 * 60 * 60 * 24));
+
+    if (daysSinceLastWorkout >= 2) {
+      return { severity: 'info', icon: '🔋', title: 'Fully Recovered', desc: 'You are well-rested. Prime time for a heavy session.' };
+    }
+
+    if (consecutiveDays >= 6) {
+      return { severity: 'critical', icon: '🚨', title: 'High CNS Fatigue Risk', desc: `You've trained ${consecutiveDays} days in a row. It is highly recommended to take a REST DAY tomorrow. Muscle grows during recovery, not training.` };
+    }
+
+    if (lastLog.workoutKey === 'legs1' || lastLog.workoutKey === 'legs2') {
+      if (daysSinceLastWorkout < 2) {
+        return { severity: 'warning', icon: '🦵', title: 'Leg Day Recovery', desc: 'You recently completed a heavy lower body session. Expect systemic CNS fatigue. Focus on upper body or active recovery today.' };
+      }
+    }
+
+    if (consecutiveDays >= 4) {
+      return { severity: 'warning', icon: '🔋', title: 'Accumulating Fatigue', desc: `You're on a ${consecutiveDays}-day streak. Keep pushing, but listen to your joints.` };
+    }
+
+    return { severity: 'info', icon: '⚡', title: 'Optimal Training Window', desc: 'Recovery is on track. Keep following the program.' };
+  }
+
+  /**
+   * Cross-reference body weight trends with workout volume
+   * to determine if recomposition, fat loss, or muscle loss is occurring.
+   */
+  generateHolisticInsights(volumeTrend) {
+    if (!this.state.weightLogs || this.state.weightLogs.length < 3 || volumeTrend.trend === 'insufficient_data') {
+      return { title: 'Gathering Data', desc: 'Keep logging your body weight and workouts for a few more days to unlock holistic analysis.' };
+    }
+
+    const sortedWeights = [...this.state.weightLogs].sort((a, b) => new Date(a.date) - new Date(b.date));
+    const recentWeights = sortedWeights.slice(-7); // Look at last 7 logs
+
+    const startWeight = recentWeights[0].weight;
+    const endWeight = recentWeights[recentWeights.length - 1].weight;
+    
+    let weightTrend = 'flat';
+    if (endWeight < startWeight - 0.5) weightTrend = 'decreasing';
+    else if (endWeight > startWeight + 0.5) weightTrend = 'increasing';
+
+    if (weightTrend === 'decreasing' && volumeTrend.trend === 'increasing') {
+      return { title: '🔥 Ultimate Recomposition', desc: 'Your body weight is dropping, but your total workout volume is increasing! You are successfully losing fat while gaining (or maintaining) strength. This is the holy grail of fitness.' };
+    } else if (weightTrend === 'decreasing' && volumeTrend.trend === 'decreasing') {
+      return { title: '⚠️ Excessive Deficit Risk', desc: 'Your weight is dropping, but your workout volume is also taking a hit. You might be in too deep of a caloric deficit, leading to muscle/strength loss. Consider increasing daily calories slightly.' };
+    } else if (weightTrend === 'increasing' && volumeTrend.trend === 'increasing') {
+      return { title: '💪 Solid Bulking Phase', desc: 'Weight is going up, and strength/volume is following. You are effectively building mass.' };
+    } else if (weightTrend === 'increasing' && volumeTrend.trend === 'decreasing') {
+      return { title: '🛑 Stop & Re-evaluate', desc: 'Body weight is increasing, but training volume is dropping. This usually indicates poor recovery, poor diet quality, or excessive stress. Evaluate your sleep and nutrition immediately.' };
+    } else if (weightTrend === 'flat' && volumeTrend.trend === 'increasing') {
+      return { title: '📈 Lean Gains', desc: 'Your weight is stable, but your volume is going up. You are building strength and likely exchanging fat for muscle.' };
+    }
+
+    return { title: 'Consistent Training', desc: 'You are maintaining your weight and strength perfectly. Stay consistent!' };
+  }
 }
 
 // Instantiate the recommendation engine
@@ -1424,6 +1555,8 @@ function initTabs() {
       // Re-trigger chart render on dashboard tab activate
       if (tabId === "dashboard-tab") {
         setTimeout(buildCharts, 50);
+      } else if (tabId === "insights-tab") {
+        setTimeout(renderInsightsTab, 50);
       }
     });
   });
@@ -2756,4 +2889,100 @@ function copyHistoryAsCSV() {
     .catch(err => {
       alert("Failed to copy CSV content: " + err);
     });
+}
+
+// ==========================================
+// Insights Tab Rendering Logic
+// ==========================================
+let insightsVolumeChartInstance = null;
+
+function renderInsightsTab() {
+  if (!coachEngine) return;
+
+  // 1. Recovery Monitor
+  const recoveryStatus = coachEngine.analyzeRecoveryStatus();
+  const rIcon = document.getElementById('recovery-icon');
+  const rTitle = document.getElementById('recovery-status-title');
+  const rDesc = document.getElementById('recovery-status-desc');
+  const rPanel = document.getElementById('recovery-monitor-panel');
+
+  if (rIcon && rTitle && rDesc && rPanel) {
+    rIcon.innerText = recoveryStatus.icon;
+    rTitle.innerText = recoveryStatus.title;
+    rDesc.innerText = recoveryStatus.desc;
+    
+    // Apply styling based on severity
+    rPanel.style.borderLeft = '4px solid ' + (
+      recoveryStatus.severity === 'critical' ? '#ff5252' :
+      recoveryStatus.severity === 'warning' ? '#f39c12' : '#2ecc71'
+    );
+    rTitle.style.color = (
+      recoveryStatus.severity === 'critical' ? '#ff5252' :
+      recoveryStatus.severity === 'warning' ? '#f39c12' : '#2ecc71'
+    );
+  }
+
+  // 2. Volume Trend & Chart
+  const volumeData = coachEngine.analyzeVolumeTrend(8);
+  
+  // 3. Holistic Analysis
+  const holisticStatus = coachEngine.generateHolisticInsights(volumeData);
+  const hTitle = document.getElementById('holistic-title');
+  const hDesc = document.getElementById('holistic-desc');
+  
+  if (hTitle && hDesc) {
+    hTitle.innerText = holisticStatus.title;
+    hDesc.innerText = holisticStatus.desc;
+  }
+
+  // Render the Volume Chart
+  renderInsightsChart(volumeData);
+}
+
+function renderInsightsChart(volumeData) {
+  const canvas = document.getElementById("insights-volume-chart");
+  if (!canvas) return;
+
+  if (insightsVolumeChartInstance) {
+    insightsVolumeChartInstance.destroy();
+  }
+
+  insightsVolumeChartInstance = new Chart(canvas, {
+    type: "line",
+    data: {
+      labels: volumeData.labels.length ? volumeData.labels : ["No Data"],
+      datasets: [{
+        label: "Total Session Volume (Sets×Reps×Weight)",
+        data: volumeData.data.length ? volumeData.data : [0],
+        backgroundColor: "rgba(102, 252, 241, 0.2)",
+        borderColor: "#66FCF1",
+        borderWidth: 2,
+        pointBackgroundColor: "#45A29E",
+        pointRadius: 4,
+        fill: true,
+        tension: 0.3
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: "#1F2833",
+          borderColor: "#66FCF1",
+          borderWidth: 1
+        }
+      },
+      scales: {
+        y: {
+          grid: { color: "rgba(255, 255, 255, 0.05)" },
+          title: { display: true, text: "Volume (kg)" }
+        },
+        x: {
+          grid: { display: false }
+        }
+      }
+    }
+  });
 }
