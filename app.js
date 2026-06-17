@@ -1643,18 +1643,19 @@ function getRestBadgeHtml(exercise) {
   return `<span class="rest-period-badge">⏱️ Rest: <span class="rest-val">${display}</span></span>`;
 }
 
-function getTargetRepsForSet(exName, setIndex) {
+function getTargetRepsForSet(exName, setIndex, dateStr) {
   const trackerState = appState.currentWeights[exName] || { minReps: 10, maxReps: 15, weight: 10 };
   
-  // Find the last logged workout of this key
-  const lastLog = [...appState.history]
-    .reverse()
-    .find(log => log.workoutKey === activeWorkoutKey);
+  // Find the last logged workout of this key that contains this exercise and is before dateStr
+  const prevLog = [...appState.history]
+    .filter(log => log.workoutKey === activeWorkoutKey && log.date < dateStr && log.exercises.some(e => e.name === exName))
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .pop();
 
   let lastEx = null;
   let didProgressLastTime = false;
-  if (lastLog) {
-    lastEx = lastLog.exercises.find(e => e.name === exName);
+  if (prevLog) {
+    lastEx = prevLog.exercises.find(e => e.name === exName);
     if (lastEx && lastEx.sets) {
       const completedSets = lastEx.sets.filter(s => s.reps !== null && s.reps !== undefined && s.reps !== "");
       if (completedSets.length > 0) {
@@ -1701,11 +1702,6 @@ function renderActiveWorkout() {
   const wDate = document.getElementById("workout-date");
   const dateStr = wDate ? wDate.value : getLocalDateString();
 
-  // Find the last logged workout of this key (for comparison details)
-  const lastLog = [...appState.history]
-    .reverse()
-    .find(log => log.workoutKey === activeWorkoutKey);
-
   program.exercises.forEach((ex, exIdx) => {
     const trackerState = appState.currentWeights[ex.name] || { weight: ex.defaultWeight, minReps: ex.minReps, maxReps: ex.maxReps, sets: ex.sets };
     const curWeight = trackerState.weight;
@@ -1725,8 +1721,14 @@ function renderActiveWorkout() {
     // Format historical logs if they exist
     let lastLogHtml = `<span class="text-muted">No history logged yet.</span>`;
     let lastEx = null;
-    if (lastLog) {
-      lastEx = lastLog.exercises.find(e => e.name === ex.name);
+    
+    const prevLog = [...appState.history]
+      .filter(log => log.workoutKey === activeWorkoutKey && log.date < dateStr && log.exercises.some(e => e.name === ex.name))
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .pop();
+
+    if (prevLog) {
+      lastEx = prevLog.exercises.find(e => e.name === ex.name);
       if (lastEx && lastEx.sets && lastEx.sets.length > 0) {
         const setStrings = lastEx.sets
           .filter(s => s.reps !== null && s.reps !== undefined && s.reps !== "")
@@ -1734,7 +1736,7 @@ function renderActiveWorkout() {
           .join(" | ");
 
         if (setStrings) {
-          const d = new Date(lastLog.date);
+          const d = new Date(prevLog.date);
           const dateStrLabel = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
           lastLogHtml = `<span class="glow-txt">${dateStrLabel}</span> ➔ ${setStrings}`;
         }
@@ -1756,7 +1758,7 @@ function renderActiveWorkout() {
     let setsHtml = "";
     const numSets = savedSets ? savedSets.length : trackerState.sets; // use saved length or target sets
     for (let s = 1; s <= numSets; s++) {
-      const { targetReps, lastRepsText } = getTargetRepsForSet(ex.name, s - 1);
+      const { targetReps, lastRepsText } = getTargetRepsForSet(ex.name, s - 1, dateStr);
       
       let weightVal = curWeight;
       let repsVal = targetReps;
@@ -2661,7 +2663,9 @@ function addSetRow(btn) {
   const nextSetNum = setRows.length + 1;
   const setIndex = nextSetNum - 1;
 
-  const { targetReps, lastRepsText } = getTargetRepsForSet(exName, setIndex);
+  const wDate = document.getElementById("workout-date");
+  const dateStr = wDate ? wDate.value : getLocalDateString();
+  const { targetReps, lastRepsText } = getTargetRepsForSet(exName, setIndex, dateStr);
 
   const newRow = document.createElement("div");
   newRow.className = "set-row";
