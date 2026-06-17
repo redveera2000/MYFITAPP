@@ -4,6 +4,18 @@ All notable changes to the AESTHETIX V-TRACK fitness tracker will be documented 
 
 ---
 
+## [1.8.0] - 2026-06-17
+### Added — Deep Research & Recommendations Dashboard
+- **📈 Progressive Overload Volume Chart**: Added a dedicated `Insights & Recovery` tab featuring a dynamic chart that visualizes Total Session Volume (Sets × Reps × Weight) for the last 8 training sessions. The underlying algorithm computes moving averages to detect whether training volume is successfully scaling up over time.
+- **🔋 Recovery & CNS Monitor**: Implemented a state-based fatigue detection engine. It actively parses recent history to flag extended training streaks (e.g., 6+ consecutive days) and high-tax Central Nervous System (CNS) events like heavy Leg Days, providing real-time scientific recovery recommendations.
+- **🧠 Holistic Data Analysis**: Built a cross-referencing engine (`generateHolisticInsights`) that evaluates body weight trends against workout volume trends to identify critical progression states such as *Ultimate Recomposition*, *Excessive Deficit Risk*, or *Solid Bulking Phase*.
+
+### Changed
+- **Cache-busting**: Bumped all asset imports in `index.html` to `?v=1.8.0` to force cache refresh.
+- **Docker Compose**: Bumped default production docker image tag to `1.8.0`.
+
+---
+
 ## [1.7.3] - 2026-06-17
 ### Fixed
 - **🎯 Progressive Overload History Context**: Fixed a critical bug in the workout target calculator and UI renderer where "Next Target" reps and weights, along with the "Last Session" display, would fail to load or incorrectly revert to baseline default values when logging multiple distinct instances of the same workout key or after clicking the "Edit Log" button. The historical lookup mechanism has been hardened to securely filter the history sequence for the exact requested exercise from the strictly preceding date context.
