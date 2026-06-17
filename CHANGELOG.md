@@ -4,6 +4,16 @@ All notable changes to the AESTHETIX V-TRACK fitness tracker will be documented 
 
 ---
 
+## [1.7.3] - 2026-06-17
+### Fixed
+- **🎯 Progressive Overload History Context**: Fixed a critical bug in the workout target calculator and UI renderer where "Next Target" reps and weights, along with the "Last Session" display, would fail to load or incorrectly revert to baseline default values when logging multiple distinct instances of the same workout key or after clicking the "Edit Log" button. The historical lookup mechanism has been hardened to securely filter the history sequence for the exact requested exercise from the strictly preceding date context.
+
+### Changed
+- **Cache-busting**: Bumped all asset imports in `index.html` to `?v=1.7.3` to force cache refresh.
+- **Docker Compose**: Bumped default production docker image tag to `1.7.3`.
+
+---
+
 ## [1.7.2] - 2026-06-11
 ### Added
 - **❌ Routine Exercise Deletion**: Added a "Remove Exercise" action button (subtle red glassmorphic design) to each exercise row in the **Workout Program & Baselines** tab. Deleting an exercise removes it from future logs without altering past history records.
