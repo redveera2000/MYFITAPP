@@ -1890,6 +1890,23 @@ input:focus::placeholder {
   box-shadow: 0 0 10px rgba(231, 76, 60, 0.3);
 }
 
+.btn-warning-outline {
+  background: transparent;
+  border: 1px solid rgba(243, 156, 18, 0.45);
+  color: #f39c12;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-warning-outline:hover {
+  background: rgba(243, 156, 18, 0.2);
+  border-color: #f1c40f;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(243, 156, 18, 0.3);
+}
+
 .delete-ex-btn {
   background: transparent;
   border: none;

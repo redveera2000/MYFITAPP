@@ -682,11 +682,14 @@ class StateManager {
   // Finalize the daily session by calculating and attaching the timer duration
   finalizeWorkoutSession(workoutKey, dateStr) {
     const timerKey = `${dateStr}_${workoutKey}`;
-    const startTime = this.activeTimers[timerKey];
+    const timerData = this.activeTimers[timerKey];
     
-    if (!startTime) return; // No timer was running
+    if (!timerData) return; // No timer was running
 
-    const elapsedMs = Date.now() - startTime;
+    let elapsedMs = timerData.accruedMs || 0;
+    if (timerData.isRunning && timerData.startTime) {
+      elapsedMs += (Date.now() - timerData.startTime);
+    }
     const durationSeconds = Math.floor(elapsedMs / 1000);
 
     let record = this.history.find(log => log.date === dateStr && log.workoutKey === workoutKey);
@@ -1752,33 +1755,48 @@ function checkAndStartTimerUI() {
   const dateStr = wDate.value;
   const timerKey = `${dateStr}_${activeWorkoutKey}`;
   
-  if (appState.activeTimers[timerKey]) {
-    // Timer is running
-    startTimerInterval();
-    updateTimerBtnState(true);
+  const timerData = appState.activeTimers[timerKey];
+  const resetBtn = document.getElementById("reset-timer-btn");
+
+  if (timerData) {
+    if (resetBtn) resetBtn.style.display = "inline-block";
+    
+    if (timerData.isRunning) {
+      startTimerInterval();
+      updateTimerBtnState("running");
+    } else {
+      stopTimerInterval();
+      updateTimerUI(); // Render the accrued time immediately
+      updateTimerBtnState("paused");
+    }
   } else {
     // No timer
+    if (resetBtn) resetBtn.style.display = "none";
     stopTimerInterval();
     resetTimerUI();
-    updateTimerBtnState(false);
+    updateTimerBtnState("stopped");
   }
 }
 
-function updateTimerBtnState(isRunning) {
+function updateTimerBtnState(state) {
   const btn = document.getElementById("start-timer-btn");
   const display = document.getElementById("workout-timer-display");
   if (!btn || !display) return;
   
-  if (isRunning) {
-    btn.textContent = "Cancel";
-    btn.classList.remove("btn-outline");
-    btn.classList.add("btn-danger-outline");
+  btn.classList.remove("btn-outline", "btn-warning-outline");
+  display.classList.remove("active");
+
+  if (state === "running") {
+    btn.textContent = "Pause";
+    btn.classList.add("btn-warning-outline");
     display.classList.add("active");
-  } else {
-    btn.textContent = "Start";
-    btn.classList.remove("btn-danger-outline");
+  } else if (state === "paused") {
+    btn.textContent = "Resume";
     btn.classList.add("btn-outline");
-    display.classList.remove("active");
+  } else {
+    // stopped
+    btn.textContent = "Start";
+    btn.classList.add("btn-outline");
   }
 }
 
@@ -1806,15 +1824,19 @@ function updateTimerUI() {
   const dateStr = wDate.value;
   const timerKey = `${dateStr}_${activeWorkoutKey}`;
   
-  const startTime = appState.activeTimers[timerKey];
+  const timerData = appState.activeTimers[timerKey];
   const display = document.getElementById("workout-timer-display");
   
-  if (!startTime || !display) {
+  if (!timerData || !display) {
     stopTimerInterval();
     return;
   }
   
-  const elapsedMs = Date.now() - startTime;
+  let elapsedMs = timerData.accruedMs || 0;
+  if (timerData.isRunning && timerData.startTime) {
+    elapsedMs += (Date.now() - timerData.startTime);
+  }
+  
   let totalSeconds = Math.floor(elapsedMs / 1000);
   
   const hrs = Math.floor(totalSeconds / 3600);
@@ -1831,18 +1853,44 @@ function toggleWorkoutTimer() {
   const dateStr = wDate.value;
   const timerKey = `${dateStr}_${activeWorkoutKey}`;
   
+  const timerData = appState.activeTimers[timerKey];
+
+  if (timerData) {
+    if (timerData.isRunning) {
+      // Pause it
+      const elapsedMs = Date.now() - timerData.startTime;
+      timerData.accruedMs += elapsedMs;
+      timerData.isRunning = false;
+      timerData.startTime = null;
+    } else {
+      // Resume it
+      timerData.isRunning = true;
+      timerData.startTime = Date.now();
+    }
+  } else {
+    // Start fresh
+    appState.activeTimers[timerKey] = {
+      startTime: Date.now(),
+      accruedMs: 0,
+      isRunning: true
+    };
+  }
+  appState.saveActiveTimers();
+  checkAndStartTimerUI();
+}
+
+function resetWorkoutTimer() {
+  const wDate = document.getElementById("workout-date");
+  if (!wDate) return;
+  const dateStr = wDate.value;
+  const timerKey = `${dateStr}_${activeWorkoutKey}`;
+  
   if (appState.activeTimers[timerKey]) {
-    // Currently running -> Cancel
-    if (confirm("Cancel and reset the current timer? Note: The timer will automatically stop and save when you click 'Save & Check Progression'.")) {
+    if (confirm("Are you sure you want to completely reset this timer to zero?")) {
       delete appState.activeTimers[timerKey];
       appState.saveActiveTimers();
       checkAndStartTimerUI();
     }
-  } else {
-    // Start it
-    appState.activeTimers[timerKey] = Date.now();
-    appState.saveActiveTimers();
-    checkAndStartTimerUI();
   }
 }
 
@@ -1883,10 +1931,14 @@ function initWorkoutSelector() {
   renderActiveWorkout();
   checkAndStartTimerUI();
   
-  // Setup Timer Button
+  // Setup Timer Buttons
   const timerBtn = document.getElementById("start-timer-btn");
   if (timerBtn) {
     timerBtn.addEventListener("click", toggleWorkoutTimer);
+  }
+  const resetBtn = document.getElementById("reset-timer-btn");
+  if (resetBtn) {
+    resetBtn.addEventListener("click", resetWorkoutTimer);
   }
 
   // Setup Save Event
