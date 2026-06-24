@@ -4,6 +4,17 @@ All notable changes to the AESTHETIX V-TRACK fitness tracker will be documented 
 
 ---
 
+## [1.9.0] - 2026-06-24
+### Added — Workout Duration Timer
+- **⏱️ Active Session Timer**: Added a real-time workout timer on the Dashboard tab. The timer automatically manages elapsed time scoped to the specific date and workout session (e.g. Push Day 1), persists across browser reloads via LocalStorage state management, and captures the total duration upon saving.
+- **📊 History Log Duration Metrics**: Logged workout durations are now visually displayed alongside the completion date and name in the Training History tab.
+
+### Changed
+- **Cache-busting**: Bumped all asset imports in `index.html` to `?v=1.9.0` to force cache refresh.
+- **Docker Compose**: Bumped default production docker image tag to `1.9.0`.
+
+---
+
 ## [1.8.0] - 2026-06-17
 ### Added — Deep Research & Recommendations Dashboard
 - **📈 Progressive Overload Volume Chart**: Added a dedicated `Insights & Recovery` tab featuring a dynamic chart that visualizes Total Session Volume (Sets × Reps × Weight) for the last 8 training sessions. The underlying algorithm computes moving averages to detect whether training volume is successfully scaling up over time.

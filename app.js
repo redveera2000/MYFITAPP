@@ -164,6 +164,9 @@ class StateManager {
         return true;
       });
     }
+
+    // Initialize Active Timers
+    this.activeTimers = JSON.parse(localStorage.getItem(this.keyPrefix + "active_timers")) || {};
   }
 
   /**
@@ -361,6 +364,10 @@ class StateManager {
 
   saveWeightLogs() {
     localStorage.setItem(this.keyPrefix + "weight_logs", JSON.stringify(this.weightLogs));
+  }
+
+  saveActiveTimers() {
+    localStorage.setItem(this.keyPrefix + "active_timers", JSON.stringify(this.activeTimers));
   }
 
   logWorkout(workoutKey, dateStr, loggedExercises) {
@@ -670,6 +677,32 @@ class StateManager {
     }
 
     return overloadReportItem;
+  }
+
+  // Finalize the daily session by calculating and attaching the timer duration
+  finalizeWorkoutSession(workoutKey, dateStr) {
+    const timerKey = `${dateStr}_${workoutKey}`;
+    const startTime = this.activeTimers[timerKey];
+    
+    if (!startTime) return; // No timer was running
+
+    const elapsedMs = Date.now() - startTime;
+    const durationSeconds = Math.floor(elapsedMs / 1000);
+
+    let record = this.history.find(log => log.date === dateStr && log.workoutKey === workoutKey);
+    if (record) {
+      record.durationSeconds = durationSeconds;
+      this.saveHistory();
+
+      // Sync to Firestore
+      if (this.firebaseInitialized && firestoreService && firestoreService.isReady()) {
+        firestoreService.saveWorkoutSession(record).catch(err => console.error('[Sync] Workout duration save error:', err));
+      }
+    }
+
+    // Clear the active timer
+    delete this.activeTimers[timerKey];
+    this.saveActiveTimers();
   }
 
   addWeightLog(weightVal, dateStr) {
@@ -1708,6 +1741,111 @@ function updateWeekdayLabel(wDateElement) {
 // 5. Active Workout Logging Interface
 let activeWorkoutKey = "push1";
 
+// ==========================================
+// WORKOUT DURATION TIMER LOGIC
+// ==========================================
+let workoutTimerInterval = null;
+
+function checkAndStartTimerUI() {
+  const wDate = document.getElementById("workout-date");
+  if (!wDate) return;
+  const dateStr = wDate.value;
+  const timerKey = `${dateStr}_${activeWorkoutKey}`;
+  
+  if (appState.activeTimers[timerKey]) {
+    // Timer is running
+    startTimerInterval();
+    updateTimerBtnState(true);
+  } else {
+    // No timer
+    stopTimerInterval();
+    resetTimerUI();
+    updateTimerBtnState(false);
+  }
+}
+
+function updateTimerBtnState(isRunning) {
+  const btn = document.getElementById("start-timer-btn");
+  const display = document.getElementById("workout-timer-display");
+  if (!btn || !display) return;
+  
+  if (isRunning) {
+    btn.textContent = "Cancel";
+    btn.classList.remove("btn-outline");
+    btn.classList.add("btn-danger-outline");
+    display.classList.add("active");
+  } else {
+    btn.textContent = "Start";
+    btn.classList.remove("btn-danger-outline");
+    btn.classList.add("btn-outline");
+    display.classList.remove("active");
+  }
+}
+
+function startTimerInterval() {
+  if (workoutTimerInterval) clearInterval(workoutTimerInterval);
+  workoutTimerInterval = setInterval(updateTimerUI, 1000);
+  updateTimerUI();
+}
+
+function stopTimerInterval() {
+  if (workoutTimerInterval) {
+    clearInterval(workoutTimerInterval);
+    workoutTimerInterval = null;
+  }
+}
+
+function resetTimerUI() {
+  const display = document.getElementById("workout-timer-display");
+  if (display) display.textContent = "00:00:00";
+}
+
+function updateTimerUI() {
+  const wDate = document.getElementById("workout-date");
+  if (!wDate) return;
+  const dateStr = wDate.value;
+  const timerKey = `${dateStr}_${activeWorkoutKey}`;
+  
+  const startTime = appState.activeTimers[timerKey];
+  const display = document.getElementById("workout-timer-display");
+  
+  if (!startTime || !display) {
+    stopTimerInterval();
+    return;
+  }
+  
+  const elapsedMs = Date.now() - startTime;
+  let totalSeconds = Math.floor(elapsedMs / 1000);
+  
+  const hrs = Math.floor(totalSeconds / 3600);
+  totalSeconds %= 3600;
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+  
+  display.textContent = `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
+
+function toggleWorkoutTimer() {
+  const wDate = document.getElementById("workout-date");
+  if (!wDate) return;
+  const dateStr = wDate.value;
+  const timerKey = `${dateStr}_${activeWorkoutKey}`;
+  
+  if (appState.activeTimers[timerKey]) {
+    // Currently running -> Cancel
+    if (confirm("Cancel and reset the current timer? Note: The timer will automatically stop and save when you click 'Save & Check Progression'.")) {
+      delete appState.activeTimers[timerKey];
+      appState.saveActiveTimers();
+      checkAndStartTimerUI();
+    }
+  } else {
+    // Start it
+    appState.activeTimers[timerKey] = Date.now();
+    appState.saveActiveTimers();
+    checkAndStartTimerUI();
+  }
+}
+
 function initWorkoutSelector() {
   const selector = document.getElementById("workout-select");
   if (!selector) return;
@@ -1727,6 +1865,7 @@ function initWorkoutSelector() {
   selector.addEventListener("change", (e) => {
     activeWorkoutKey = e.target.value;
     renderActiveWorkout();
+    checkAndStartTimerUI();
   });
 
   // Load current date with timezone-accurate local date and update weekday label
@@ -1737,10 +1876,18 @@ function initWorkoutSelector() {
     wDate.addEventListener("change", () => {
       updateWeekdayLabel(wDate);
       renderActiveWorkout(); // re-render to load correct date history indicators
+      checkAndStartTimerUI();
     });
   }
 
   renderActiveWorkout();
+  checkAndStartTimerUI();
+  
+  // Setup Timer Button
+  const timerBtn = document.getElementById("start-timer-btn");
+  if (timerBtn) {
+    timerBtn.addEventListener("click", toggleWorkoutTimer);
+  }
 
   // Setup Save Event
   const saveBtn = document.getElementById("save-workout-btn");
@@ -2135,6 +2282,11 @@ function submitLoggedWorkout() {
   } else {
     alert("Workout logs saved successfully!");
   }
+
+  // Finalize the timer if it's running
+  appState.finalizeWorkoutSession(activeWorkoutKey, dateStr);
+  checkAndStartTimerUI(); // UI will reset the timer string to 00:00:00 and swap btn to Start
+
 
   // Refresh other tabs & lists
   renderPlanList();
@@ -2566,10 +2718,22 @@ function renderHistoryTable() {
     const d = new Date(log.date);
     const dateFormatted = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 
+    let durationHtml = "";
+    if (log.durationSeconds) {
+      const hrs = Math.floor(log.durationSeconds / 3600);
+      const mins = Math.floor((log.durationSeconds % 3600) / 60);
+      const secs = log.durationSeconds % 60;
+      let timeStr = "";
+      if (hrs > 0) timeStr += `${hrs}h `;
+      if (mins > 0 || hrs > 0) timeStr += `${mins}m `;
+      timeStr += `${secs}s`;
+      durationHtml = `<span class="history-card-duration" style="font-size: 12px; color: var(--accent-secondary); margin-left: 10px;">⏱ ${timeStr}</span>`;
+    }
+
     card.innerHTML = `
       <div class="history-card-header">
         <span class="history-card-date">${dateFormatted}</span>
-        <h4 class="history-card-title glow-txt">${log.workoutName}</h4>
+        <h4 class="history-card-title glow-txt">${log.workoutName}${durationHtml}</h4>
         <button class="delete-history-btn" data-id="${log.id}">×</button>
       </div>
       <div class="history-card-details">
