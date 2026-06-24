@@ -180,6 +180,28 @@ body {
   background: #95a5a6;
 }
 
+/* Workout Timer Styles */
+.workout-timer {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent-primary);
+  background: rgba(102, 252, 241, 0.1);
+  border: 1px solid rgba(102, 252, 241, 0.3);
+  padding: 4px 12px;
+  border-radius: 6px;
+  letter-spacing: 1px;
+  box-shadow: 0 0 10px rgba(69, 162, 158, 0.2) inset;
+  transition: all 0.3s ease;
+}
+
+.workout-timer.active {
+  color: #fff;
+  background: rgba(102, 252, 241, 0.2);
+  border-color: #66FCF1;
+  box-shadow: 0 0 12px rgba(102, 252, 241, 0.4);
+}
+
 .sync-dot.error {
   background: #e74c3c;
   box-shadow: 0 0 6px rgba(231, 76, 60, 0.5);
@@ -1866,6 +1888,23 @@ input:focus::placeholder {
   border-color: #ff4757;
   color: #ffffff;
   box-shadow: 0 0 10px rgba(231, 76, 60, 0.3);
+}
+
+.btn-warning-outline {
+  background: transparent;
+  border: 1px solid rgba(243, 156, 18, 0.45);
+  color: #f39c12;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-warning-outline:hover {
+  background: rgba(243, 156, 18, 0.2);
+  border-color: #f1c40f;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(243, 156, 18, 0.3);
 }
 
 .delete-ex-btn {

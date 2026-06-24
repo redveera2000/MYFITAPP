@@ -164,6 +164,9 @@ class StateManager {
         return true;
       });
     }
+
+    // Initialize Active Timers
+    this.activeTimers = JSON.parse(localStorage.getItem(this.keyPrefix + "active_timers")) || {};
   }
 
   /**
@@ -361,6 +364,10 @@ class StateManager {
 
   saveWeightLogs() {
     localStorage.setItem(this.keyPrefix + "weight_logs", JSON.stringify(this.weightLogs));
+  }
+
+  saveActiveTimers() {
+    localStorage.setItem(this.keyPrefix + "active_timers", JSON.stringify(this.activeTimers));
   }
 
   logWorkout(workoutKey, dateStr, loggedExercises) {
@@ -670,6 +677,35 @@ class StateManager {
     }
 
     return overloadReportItem;
+  }
+
+  // Finalize the daily session by calculating and attaching the timer duration
+  finalizeWorkoutSession(workoutKey, dateStr) {
+    const timerKey = `${dateStr}_${workoutKey}`;
+    const timerData = this.activeTimers[timerKey];
+    
+    if (!timerData) return; // No timer was running
+
+    let elapsedMs = timerData.accruedMs || 0;
+    if (timerData.isRunning && timerData.startTime) {
+      elapsedMs += (Date.now() - timerData.startTime);
+    }
+    const durationSeconds = Math.floor(elapsedMs / 1000);
+
+    let record = this.history.find(log => log.date === dateStr && log.workoutKey === workoutKey);
+    if (record) {
+      record.durationSeconds = durationSeconds;
+      this.saveHistory();
+
+      // Sync to Firestore
+      if (this.firebaseInitialized && firestoreService && firestoreService.isReady()) {
+        firestoreService.saveWorkoutSession(record).catch(err => console.error('[Sync] Workout duration save error:', err));
+      }
+    }
+
+    // Clear the active timer
+    delete this.activeTimers[timerKey];
+    this.saveActiveTimers();
   }
 
   addWeightLog(weightVal, dateStr) {
@@ -1708,6 +1744,156 @@ function updateWeekdayLabel(wDateElement) {
 // 5. Active Workout Logging Interface
 let activeWorkoutKey = "push1";
 
+// ==========================================
+// WORKOUT DURATION TIMER LOGIC
+// ==========================================
+let workoutTimerInterval = null;
+
+function checkAndStartTimerUI() {
+  const wDate = document.getElementById("workout-date");
+  if (!wDate) return;
+  const dateStr = wDate.value;
+  const timerKey = `${dateStr}_${activeWorkoutKey}`;
+  
+  const timerData = appState.activeTimers[timerKey];
+  const resetBtn = document.getElementById("reset-timer-btn");
+
+  if (timerData) {
+    if (resetBtn) resetBtn.style.display = "inline-block";
+    
+    if (timerData.isRunning) {
+      startTimerInterval();
+      updateTimerBtnState("running");
+    } else {
+      stopTimerInterval();
+      updateTimerUI(); // Render the accrued time immediately
+      updateTimerBtnState("paused");
+    }
+  } else {
+    // No timer
+    if (resetBtn) resetBtn.style.display = "none";
+    stopTimerInterval();
+    resetTimerUI();
+    updateTimerBtnState("stopped");
+  }
+}
+
+function updateTimerBtnState(state) {
+  const btn = document.getElementById("start-timer-btn");
+  const display = document.getElementById("workout-timer-display");
+  if (!btn || !display) return;
+  
+  btn.classList.remove("btn-outline", "btn-warning-outline");
+  display.classList.remove("active");
+
+  if (state === "running") {
+    btn.textContent = "Pause";
+    btn.classList.add("btn-warning-outline");
+    display.classList.add("active");
+  } else if (state === "paused") {
+    btn.textContent = "Resume";
+    btn.classList.add("btn-outline");
+  } else {
+    // stopped
+    btn.textContent = "Start";
+    btn.classList.add("btn-outline");
+  }
+}
+
+function startTimerInterval() {
+  if (workoutTimerInterval) clearInterval(workoutTimerInterval);
+  workoutTimerInterval = setInterval(updateTimerUI, 1000);
+  updateTimerUI();
+}
+
+function stopTimerInterval() {
+  if (workoutTimerInterval) {
+    clearInterval(workoutTimerInterval);
+    workoutTimerInterval = null;
+  }
+}
+
+function resetTimerUI() {
+  const display = document.getElementById("workout-timer-display");
+  if (display) display.textContent = "00:00:00";
+}
+
+function updateTimerUI() {
+  const wDate = document.getElementById("workout-date");
+  if (!wDate) return;
+  const dateStr = wDate.value;
+  const timerKey = `${dateStr}_${activeWorkoutKey}`;
+  
+  const timerData = appState.activeTimers[timerKey];
+  const display = document.getElementById("workout-timer-display");
+  
+  if (!timerData || !display) {
+    stopTimerInterval();
+    return;
+  }
+  
+  let elapsedMs = timerData.accruedMs || 0;
+  if (timerData.isRunning && timerData.startTime) {
+    elapsedMs += (Date.now() - timerData.startTime);
+  }
+  
+  let totalSeconds = Math.floor(elapsedMs / 1000);
+  
+  const hrs = Math.floor(totalSeconds / 3600);
+  totalSeconds %= 3600;
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+  
+  display.textContent = `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
+
+function toggleWorkoutTimer() {
+  const wDate = document.getElementById("workout-date");
+  if (!wDate) return;
+  const dateStr = wDate.value;
+  const timerKey = `${dateStr}_${activeWorkoutKey}`;
+  
+  const timerData = appState.activeTimers[timerKey];
+
+  if (timerData) {
+    if (timerData.isRunning) {
+      // Pause it
+      const elapsedMs = Date.now() - timerData.startTime;
+      timerData.accruedMs += elapsedMs;
+      timerData.isRunning = false;
+      timerData.startTime = null;
+    } else {
+      // Resume it
+      timerData.isRunning = true;
+      timerData.startTime = Date.now();
+    }
+  } else {
+    // Start fresh
+    appState.activeTimers[timerKey] = {
+      startTime: Date.now(),
+      accruedMs: 0,
+      isRunning: true
+    };
+  }
+  appState.saveActiveTimers();
+  checkAndStartTimerUI();
+}
+
+function resetWorkoutTimer() {
+  const wDate = document.getElementById("workout-date");
+  if (!wDate) return;
+  const dateStr = wDate.value;
+  const timerKey = `${dateStr}_${activeWorkoutKey}`;
+  
+  if (appState.activeTimers[timerKey]) {
+    if (confirm("Are you sure you want to completely reset this timer to zero?")) {
+      delete appState.activeTimers[timerKey];
+      appState.saveActiveTimers();
+      checkAndStartTimerUI();
+    }
+  }
+}
+
 function initWorkoutSelector() {
   const selector = document.getElementById("workout-select");
   if (!selector) return;
@@ -1727,6 +1913,7 @@ function initWorkoutSelector() {
   selector.addEventListener("change", (e) => {
     activeWorkoutKey = e.target.value;
     renderActiveWorkout();
+    checkAndStartTimerUI();
   });
 
   // Load current date with timezone-accurate local date and update weekday label
@@ -1737,10 +1924,22 @@ function initWorkoutSelector() {
     wDate.addEventListener("change", () => {
       updateWeekdayLabel(wDate);
       renderActiveWorkout(); // re-render to load correct date history indicators
+      checkAndStartTimerUI();
     });
   }
 
   renderActiveWorkout();
+  checkAndStartTimerUI();
+  
+  // Setup Timer Buttons
+  const timerBtn = document.getElementById("start-timer-btn");
+  if (timerBtn) {
+    timerBtn.addEventListener("click", toggleWorkoutTimer);
+  }
+  const resetBtn = document.getElementById("reset-timer-btn");
+  if (resetBtn) {
+    resetBtn.addEventListener("click", resetWorkoutTimer);
+  }
 
   // Setup Save Event
   const saveBtn = document.getElementById("save-workout-btn");
@@ -2135,6 +2334,11 @@ function submitLoggedWorkout() {
   } else {
     alert("Workout logs saved successfully!");
   }
+
+  // Finalize the timer if it's running
+  appState.finalizeWorkoutSession(activeWorkoutKey, dateStr);
+  checkAndStartTimerUI(); // UI will reset the timer string to 00:00:00 and swap btn to Start
+
 
   // Refresh other tabs & lists
   renderPlanList();
@@ -2566,10 +2770,22 @@ function renderHistoryTable() {
     const d = new Date(log.date);
     const dateFormatted = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 
+    let durationHtml = "";
+    if (log.durationSeconds) {
+      const hrs = Math.floor(log.durationSeconds / 3600);
+      const mins = Math.floor((log.durationSeconds % 3600) / 60);
+      const secs = log.durationSeconds % 60;
+      let timeStr = "";
+      if (hrs > 0) timeStr += `${hrs}h `;
+      if (mins > 0 || hrs > 0) timeStr += `${mins}m `;
+      timeStr += `${secs}s`;
+      durationHtml = `<span class="history-card-duration" style="font-size: 12px; color: var(--accent-secondary); margin-left: 10px;">⏱ ${timeStr}</span>`;
+    }
+
     card.innerHTML = `
       <div class="history-card-header">
         <span class="history-card-date">${dateFormatted}</span>
-        <h4 class="history-card-title glow-txt">${log.workoutName}</h4>
+        <h4 class="history-card-title glow-txt">${log.workoutName}${durationHtml}</h4>
         <button class="delete-history-btn" data-id="${log.id}">×</button>
       </div>
       <div class="history-card-details">
