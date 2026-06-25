@@ -1749,7 +1749,26 @@ let activeWorkoutKey = "push1";
 // ==========================================
 let workoutTimerInterval = null;
 
+function hasWeightLogForDate(dateStr) {
+  return appState.weightLogs.some(log => log.date === dateStr);
+}
+
+function checkMissingWeightBanner() {
+  const wDate = document.getElementById("workout-date");
+  if (!wDate) return;
+  const dateStr = wDate.value;
+  const banner = document.getElementById("missing-weight-banner");
+  
+  if (!hasWeightLogForDate(dateStr)) {
+    if (banner) banner.style.display = "flex";
+  } else {
+    if (banner) banner.style.display = "none";
+  }
+}
+
 function checkAndStartTimerUI() {
+  checkMissingWeightBanner();
+  
   const wDate = document.getElementById("workout-date");
   if (!wDate) return;
   const dateStr = wDate.value;
@@ -1855,6 +1874,16 @@ function toggleWorkoutTimer() {
   
   const timerData = appState.activeTimers[timerKey];
 
+  if (!timerData && !hasWeightLogForDate(dateStr)) {
+    // Show gatekeeper modal
+    const modal = document.getElementById("weight-gatekeeper-modal");
+    if (modal) {
+      modal.style.display = "flex";
+      document.getElementById("modal-weight-input").focus();
+    }
+    return;
+  }
+
   if (timerData) {
     if (timerData.isRunning) {
       // Pause it
@@ -1939,6 +1968,65 @@ function initWorkoutSelector() {
   const resetBtn = document.getElementById("reset-timer-btn");
   if (resetBtn) {
     resetBtn.addEventListener("click", resetWorkoutTimer);
+  }
+
+  // Setup Missing Weight Handlers
+  const modalSkipBtn = document.getElementById("modal-weight-skip");
+  const modalSubmitBtn = document.getElementById("modal-weight-submit");
+  const bannerSubmitBtn = document.getElementById("banner-weight-submit");
+
+  if (modalSkipBtn) {
+    modalSkipBtn.addEventListener("click", () => {
+      document.getElementById("weight-gatekeeper-modal").style.display = "none";
+      // Force start timer bypassing the check
+      const wDate = document.getElementById("workout-date");
+      if (!wDate) return;
+      const dateStr = wDate.value;
+      const timerKey = `${dateStr}_${activeWorkoutKey}`;
+      appState.activeTimers[timerKey] = {
+        startTime: Date.now(),
+        accruedMs: 0,
+        isRunning: true
+      };
+      appState.saveActiveTimers();
+      checkAndStartTimerUI();
+    });
+  }
+
+  if (modalSubmitBtn) {
+    modalSubmitBtn.addEventListener("click", () => {
+      const wVal = document.getElementById("modal-weight-input").value;
+      if (!wVal) return;
+      const wDate = document.getElementById("workout-date");
+      if (!wDate) return;
+      const dateStr = wDate.value;
+      
+      appState.addWeightLog(parseFloat(wVal), dateStr);
+      document.getElementById("weight-gatekeeper-modal").style.display = "none";
+      updateDashboardData();
+      
+      // Start timer
+      const timerKey = `${dateStr}_${activeWorkoutKey}`;
+      appState.activeTimers[timerKey] = {
+        startTime: Date.now(),
+        accruedMs: 0,
+        isRunning: true
+      };
+      appState.saveActiveTimers();
+      checkAndStartTimerUI();
+    });
+  }
+
+  if (bannerSubmitBtn) {
+    bannerSubmitBtn.addEventListener("click", () => {
+      const wVal = document.getElementById("banner-weight-input").value;
+      if (!wVal) return;
+      const wDate = document.getElementById("workout-date");
+      if (!wDate) return;
+      appState.addWeightLog(parseFloat(wVal), wDate.value);
+      updateDashboardData();
+      checkMissingWeightBanner();
+    });
   }
 
   // Setup Save Event
