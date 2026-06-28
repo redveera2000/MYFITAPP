@@ -198,6 +198,10 @@ class StateManager {
             if (user.email && user.email.toLowerCase() === authorizedEmail) {
               console.log(`[StateManager] Authenticated as authorized user: ${user.email}`);
               
+              // IMMEDIATE UNBLOCK: Switch layout visibility to hide login overlay and show app container instantly
+              document.getElementById('login-container').style.display = 'none';
+              document.querySelector('.app-container').style.display = 'block';
+              
               if (typeof firestoreService !== 'undefined') {
                 firestoreService.init(getFirestoreDb(), user.uid);
                 
@@ -239,10 +243,6 @@ class StateManager {
 
                 this.firebaseInitialized = true;
               }
-              
-              // Switch layout visibility: hide login overlay and show app container
-              document.getElementById('login-container').style.display = 'none';
-              document.querySelector('.app-container').style.display = 'block';
               
               // Ensure we check for missing weight log globally once data is fully loaded
               checkMissingWeightBanner();
@@ -288,8 +288,15 @@ class StateManager {
     if (!firestoreService || !firestoreService.isReady()) return;
 
     try {
-      // Load profile
-      const cloudProfile = await firestoreService.loadProfile();
+      // Fetch all data concurrently to prevent sequential bottlenecks
+      const [cloudProfile, cloudWeights, cloudHistory, cloudWeightLogs] = await Promise.all([
+        firestoreService.loadProfile(),
+        firestoreService.loadExerciseTargets(),
+        firestoreService.loadWorkoutHistory(),
+        firestoreService.loadWeightLogs()
+      ]);
+
+      // Process profile
       if (cloudProfile) {
         this.profile = { ...this.profile, ...cloudProfile };
         if (cloudProfile.customProgram) {
@@ -305,22 +312,19 @@ class StateManager {
         this.saveProfile();
       }
 
-      // Load exercise targets
-      const cloudWeights = await firestoreService.loadExerciseTargets();
+      // Process exercise targets
       if (cloudWeights && Object.keys(cloudWeights).length > 0) {
         this.currentWeights = { ...this.currentWeights, ...cloudWeights };
         this.saveWeights();
       }
 
-      // Load workout history
-      const cloudHistory = await firestoreService.loadWorkoutHistory();
+      // Process workout history
       if (cloudHistory && cloudHistory.length > 0) {
         this.history = cloudHistory;
         this.saveHistory();
       }
 
-      // Load weight logs
-      const cloudWeightLogs = await firestoreService.loadWeightLogs();
+      // Process weight logs
       if (cloudWeightLogs && cloudWeightLogs.length > 0) {
         this.weightLogs = cloudWeightLogs;
         this.saveWeightLogs();

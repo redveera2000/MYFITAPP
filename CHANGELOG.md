@@ -4,6 +4,11 @@ All notable changes to the AESTHETIX V-TRACK fitness tracker will be documented 
 
 ---
 
+## [1.9.2] - 2026-06-28
+### Performance
+- **Instant Login UI:** The login screen now disappears instantly upon authentication instead of freezing while historical data downloads.
+- **Concurrent Syncing:** The `loadFromFirestore` sync pipeline now utilizes `Promise.all()` to download all user data (profile, history, weights, etc.) simultaneously, dramatically reducing login loading time.
+
 ## [1.9.1] - 2026-06-28
 ### Fixed
 - **Weight Log Banner:** The missing weight log banner is now globally visible on all tabs (including Dashboard) and re-evaluates correctly after Firebase synchronization finishes.
