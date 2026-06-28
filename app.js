@@ -243,6 +243,9 @@ class StateManager {
               // Switch layout visibility: hide login overlay and show app container
               document.getElementById('login-container').style.display = 'none';
               document.querySelector('.app-container').style.display = 'block';
+              
+              // Ensure we check for missing weight log globally once data is fully loaded
+              checkMissingWeightBanner();
             } else {
               console.warn(`[StateManager] Blocked unauthorized sign-in: ${user.email}`);
               if (typeof signOutUser === 'function') {
@@ -1754,9 +1757,12 @@ function hasWeightLogForDate(dateStr) {
 }
 
 function checkMissingWeightBanner() {
+  let dateStr = getLocalDateString();
   const wDate = document.getElementById("workout-date");
-  if (!wDate) return;
-  const dateStr = wDate.value;
+  if (wDate && wDate.value) {
+    dateStr = wDate.value;
+  }
+  
   const banner = document.getElementById("missing-weight-banner");
   
   if (!hasWeightLogForDate(dateStr)) {
@@ -2408,8 +2414,17 @@ function submitLoggedWorkout() {
 
   if (unsavedWithDataCount === 0) {
     if (saveBtn) saveBtn.disabled = false;
+    
+    // Even if all exercises are individually saved, we STILL need to finalize the timer!
     if (savedCount === cards.length) {
       alert("All exercises for this session are already saved!");
+      
+      // Finalize the timer if it's running
+      appState.finalizeWorkoutSession(activeWorkoutKey, dateStr);
+      checkAndStartTimerUI();
+      
+      // Refresh to reflect duration in history
+      renderHistoryTable();
     } else {
       alert("You must log reps for at least one set to save the workout!");
     }

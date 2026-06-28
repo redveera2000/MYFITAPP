@@ -76,6 +76,18 @@
 
     <main>
       
+      <!-- Missing Weight Persistent Banner (Global) -->
+      <div id="missing-weight-banner" class="glass-panel" style="display: none; background: rgba(243, 156, 18, 0.1); border-left: 4px solid #f39c12; margin-bottom: 20px; align-items: center; justify-content: space-between;">
+        <div>
+          <h4 style="color: #f39c12; margin: 0 0 5px 0; font-family: var(--font-display); font-size: 15px;">⚠️ Missing Daily Weight Log</h4>
+          <p style="margin: 0; font-size: 13px; color: var(--text-secondary);">Logging your body weight is crucial for accurate progressive overload and volume tracking.</p>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <input type="number" id="banner-weight-input" class="form-control" step="0.1" style="width: 80px;" placeholder="kg">
+          <button id="banner-weight-submit" class="btn btn-warning-outline" style="margin: 0; padding: 8px 16px;">Log It</button>
+        </div>
+      </div>
+      
       <!-- 1. DASHBOARD TAB -->
       <section id="dashboard-tab" class="tab-content active">
         <h2 class="tab-section-title">Performance Summary</h2>
@@ -202,18 +214,6 @@
       <!-- 2. TRACKER TAB -->
       <section id="tracker-tab" class="tab-content">
         <h2 class="tab-section-title">Active Workout Logger</h2>
-        
-        <!-- Missing Weight Persistent Banner -->
-        <div id="missing-weight-banner" class="glass-panel" style="display: none; background: rgba(243, 156, 18, 0.1); border-left: 4px solid #f39c12; margin-bottom: 20px; align-items: center; justify-content: space-between;">
-          <div>
-            <h4 style="color: #f39c12; margin: 0 0 5px 0; font-family: var(--font-display); font-size: 15px;">⚠️ Missing Daily Weight Log</h4>
-            <p style="margin: 0; font-size: 13px; color: var(--text-secondary);">Logging your body weight is crucial for accurate progressive overload and volume tracking.</p>
-          </div>
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <input type="number" id="banner-weight-input" class="form-control" step="0.1" style="width: 80px;" placeholder="kg">
-            <button id="banner-weight-submit" class="btn btn-warning-outline" style="margin: 0; padding: 8px 16px;">Log It</button>
-          </div>
-        </div>
         
         <div class="glass-panel" style="margin-bottom: 24px;">
           <div class="log-setup-row">

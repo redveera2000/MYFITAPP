@@ -4,6 +4,11 @@ All notable changes to the AESTHETIX V-TRACK fitness tracker will be documented 
 
 ---
 
+## [1.9.1] - 2026-06-28
+### Fixed
+- **Weight Log Banner:** The missing weight log banner is now globally visible on all tabs (including Dashboard) and re-evaluates correctly after Firebase synchronization finishes.
+- **Timer Save Bug:** Fixed an issue where clicking "Save & Check Progression" after all exercises were individually saved would skip halting and saving the timer duration. Timer duration now properly saves to training history.
+
 ## [1.9.0] - 2026-06-24
 ### Added — Workout Duration Timer
 - **⏱️ Active Session Timer**: Added a real-time workout timer on the Dashboard tab. The timer automatically manages elapsed time scoped to the specific date and workout session (e.g. Push Day 1), persists across browser reloads via LocalStorage state management, and captures the total duration upon saving.
