@@ -2297,7 +2297,20 @@ function updateWorkoutStatusBadge() {
     badge.style.border = "1px solid rgba(46, 204, 113, 0.3)";
     badge.style.alignItems = "center";
     badge.style.justifyContent = "center";
-    badge.textContent = "COMPLETED ✓";
+    
+    let durationText = "COMPLETED ✓";
+    const record = appState.history.find(log => log.date === dateStr && log.workoutKey === activeWorkoutKey);
+    if (record && record.durationSeconds) {
+      const hrs = Math.floor(record.durationSeconds / 3600);
+      const mins = Math.floor((record.durationSeconds % 3600) / 60);
+      const secs = record.durationSeconds % 60;
+      let timeStr = "";
+      if (hrs > 0) timeStr += `${hrs}h `;
+      if (mins > 0 || hrs > 0) timeStr += `${mins}m `;
+      timeStr += `${secs}s`;
+      durationText = `COMPLETED ✓ (⏱ ${timeStr})`;
+    }
+    badge.textContent = durationText;
     if (discardBtn) discardBtn.style.display = "inline-flex";
   } else {
     badge.style.display = "inline-flex";
