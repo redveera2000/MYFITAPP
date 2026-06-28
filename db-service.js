@@ -225,6 +225,7 @@ class FirestoreService {
         workoutName: sessionData.workoutName,
         status: status,
         totalVolume: totalVolume,
+        durationSeconds: sessionData.durationSeconds || null,
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
@@ -338,6 +339,7 @@ class FirestoreService {
           date: sessionData.date,
           workoutKey: sessionData.workoutKey,
           workoutName: sessionData.workoutName,
+          durationSeconds: sessionData.durationSeconds || null,
           exercises: exercises
         });
       }

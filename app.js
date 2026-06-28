@@ -198,6 +198,10 @@ class StateManager {
             if (user.email && user.email.toLowerCase() === authorizedEmail) {
               console.log(`[StateManager] Authenticated as authorized user: ${user.email}`);
               
+              // IMMEDIATE UNBLOCK: Switch layout visibility to hide login overlay and show app container instantly
+              document.getElementById('login-container').style.display = 'none';
+              document.querySelector('.app-container').style.display = 'block';
+              
               if (typeof firestoreService !== 'undefined') {
                 firestoreService.init(getFirestoreDb(), user.uid);
                 
@@ -240,9 +244,8 @@ class StateManager {
                 this.firebaseInitialized = true;
               }
               
-              // Switch layout visibility: hide login overlay and show app container
-              document.getElementById('login-container').style.display = 'none';
-              document.querySelector('.app-container').style.display = 'block';
+              // Ensure we check for missing weight log globally once data is fully loaded
+              checkMissingWeightBanner();
             } else {
               console.warn(`[StateManager] Blocked unauthorized sign-in: ${user.email}`);
               if (typeof signOutUser === 'function') {
@@ -285,8 +288,15 @@ class StateManager {
     if (!firestoreService || !firestoreService.isReady()) return;
 
     try {
-      // Load profile
-      const cloudProfile = await firestoreService.loadProfile();
+      // Fetch all data concurrently to prevent sequential bottlenecks
+      const [cloudProfile, cloudWeights, cloudHistory, cloudWeightLogs] = await Promise.all([
+        firestoreService.loadProfile(),
+        firestoreService.loadExerciseTargets(),
+        firestoreService.loadWorkoutHistory(),
+        firestoreService.loadWeightLogs()
+      ]);
+
+      // Process profile
       if (cloudProfile) {
         this.profile = { ...this.profile, ...cloudProfile };
         if (cloudProfile.customProgram) {
@@ -302,22 +312,19 @@ class StateManager {
         this.saveProfile();
       }
 
-      // Load exercise targets
-      const cloudWeights = await firestoreService.loadExerciseTargets();
+      // Process exercise targets
       if (cloudWeights && Object.keys(cloudWeights).length > 0) {
         this.currentWeights = { ...this.currentWeights, ...cloudWeights };
         this.saveWeights();
       }
 
-      // Load workout history
-      const cloudHistory = await firestoreService.loadWorkoutHistory();
+      // Process workout history
       if (cloudHistory && cloudHistory.length > 0) {
         this.history = cloudHistory;
         this.saveHistory();
       }
 
-      // Load weight logs
-      const cloudWeightLogs = await firestoreService.loadWeightLogs();
+      // Process weight logs
       if (cloudWeightLogs && cloudWeightLogs.length > 0) {
         this.weightLogs = cloudWeightLogs;
         this.saveWeightLogs();
@@ -1754,9 +1761,12 @@ function hasWeightLogForDate(dateStr) {
 }
 
 function checkMissingWeightBanner() {
+  let dateStr = getLocalDateString();
   const wDate = document.getElementById("workout-date");
-  if (!wDate) return;
-  const dateStr = wDate.value;
+  if (wDate && wDate.value) {
+    dateStr = wDate.value;
+  }
+  
   const banner = document.getElementById("missing-weight-banner");
   
   if (!hasWeightLogForDate(dateStr)) {
@@ -2287,7 +2297,20 @@ function updateWorkoutStatusBadge() {
     badge.style.border = "1px solid rgba(46, 204, 113, 0.3)";
     badge.style.alignItems = "center";
     badge.style.justifyContent = "center";
-    badge.textContent = "COMPLETED ✓";
+    
+    let durationText = "COMPLETED ✓";
+    const record = appState.history.find(log => log.date === dateStr && log.workoutKey === activeWorkoutKey);
+    if (record && record.durationSeconds) {
+      const hrs = Math.floor(record.durationSeconds / 3600);
+      const mins = Math.floor((record.durationSeconds % 3600) / 60);
+      const secs = record.durationSeconds % 60;
+      let timeStr = "";
+      if (hrs > 0) timeStr += `${hrs}h `;
+      if (mins > 0 || hrs > 0) timeStr += `${mins}m `;
+      timeStr += `${secs}s`;
+      durationText = `COMPLETED ✓ (⏱ ${timeStr})`;
+    }
+    badge.textContent = durationText;
     if (discardBtn) discardBtn.style.display = "inline-flex";
   } else {
     badge.style.display = "inline-flex";
@@ -2408,8 +2431,17 @@ function submitLoggedWorkout() {
 
   if (unsavedWithDataCount === 0) {
     if (saveBtn) saveBtn.disabled = false;
+    
+    // Even if all exercises are individually saved, we STILL need to finalize the timer!
     if (savedCount === cards.length) {
       alert("All exercises for this session are already saved!");
+      
+      // Finalize the timer if it's running
+      appState.finalizeWorkoutSession(activeWorkoutKey, dateStr);
+      checkAndStartTimerUI();
+      
+      // Refresh to reflect duration in history
+      renderHistoryTable();
     } else {
       alert("You must log reps for at least one set to save the workout!");
     }
