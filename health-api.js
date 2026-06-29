@@ -4,7 +4,7 @@
  * data (steps, distance, calories) from the Google Fit REST API.
  */
 
-const GOOGLE_FIT_SCOPE = 'https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.body.read https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly';
+const GOOGLE_FIT_SCOPE = 'https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.body.read https://www.googleapis.com/auth/fitness.location.read';
 let tokenClient;
 
 /**
