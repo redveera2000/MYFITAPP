@@ -38,8 +38,8 @@ function requestGoogleFitSync() {
     alert("Google Client ID is not configured properly in firebase-config.js. Cannot sync.");
     return;
   }
-  // Request an access token
-  tokenClient.requestAccessToken();
+  // Request an access token, forcing the consent screen to ensure new scopes are granted
+  tokenClient.requestAccessToken({prompt: 'consent'});
 }
 
 /**
