@@ -62,10 +62,7 @@ async function fetchGoogleFitData(accessToken) {
 
     const requestBody = {
       aggregateBy: [
-        { 
-          dataTypeName: 'com.google.step_count.delta',
-          dataSourceId: 'derived:com.google.step_count.delta:com.google.android.gms:estimated_steps'
-        },
+        { dataTypeName: 'com.google.step_count.delta' },
         { dataTypeName: 'com.google.calories.expended' }
       ],
       bucketByTime: { durationMillis: 86400000 }, // 1 day buckets
@@ -122,7 +119,11 @@ function processGoogleFitData(apiData) {
   apiData.bucket.forEach(bucket => {
     // Determine the date from the bucket start time
     const startDate = new Date(parseInt(bucket.startTimeMillis));
-    const dateStr = startDate.toISOString().split('T')[0];
+    // CRITICAL: Must use local time methods, not UTC (toISOString), to avoid off-by-one-day errors!
+    const year = startDate.getFullYear();
+    const month = String(startDate.getMonth() + 1).padStart(2, '0');
+    const day = String(startDate.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
     
     const entry = {
       date: dateStr,
