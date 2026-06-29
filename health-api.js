@@ -167,5 +167,6 @@ function processGoogleFitData(apiData) {
     }
   });
 
+  console.log('[Health API] Final Parsed Data from Google:', logs);
   return logs;
 }
