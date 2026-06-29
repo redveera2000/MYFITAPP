@@ -63,7 +63,6 @@ async function fetchGoogleFitData(accessToken) {
     const requestBody = {
       aggregateBy: [
         { dataTypeName: 'com.google.step_count.delta' },
-        { dataTypeName: 'com.google.distance.delta' },
         { dataTypeName: 'com.google.calories.expended' }
       ],
       bucketByTime: { durationMillis: 86400000 }, // 1 day buckets
@@ -81,7 +80,9 @@ async function fetchGoogleFitData(accessToken) {
     });
 
     if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
+      const errorText = await response.text();
+      console.error('[Health API] Google API Error Details:', errorText);
+      throw new Error(`API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
