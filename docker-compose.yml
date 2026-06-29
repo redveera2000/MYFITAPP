@@ -21,3 +21,4 @@ services:
       - FIREBASE_APP_ID=${FIREBASE_APP_ID}
       - SINGLE_USER_EMAIL=${SINGLE_USER_EMAIL:-veeradinesh219@gmail.com}
       - SINGLE_USER_PASSWORD=${SINGLE_USER_PASSWORD:-vtrackDefaultPassword123!}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}

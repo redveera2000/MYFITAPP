@@ -70,6 +70,8 @@ jobs:
             PROD_PWD="${{ secrets.SINGLE_USER_PASSWORD }}"
             echo "SINGLE_USER_PASSWORD=${DEV_PWD:-$PROD_PWD}" >> .env
             
+            echo "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" >> .env
+            
             echo "CONTAINER_NAME=vtrack-app-dev" >> .env
             echo "VTRACK_PORT=8080" >> .env
             
