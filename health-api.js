@@ -62,10 +62,19 @@ async function fetchGoogleFitData(accessToken) {
 
     const requestBody = {
       aggregateBy: [
-        { dataTypeName: 'com.google.step_count.delta' },
+        { 
+          dataTypeName: 'com.google.step_count.delta',
+          dataSourceId: 'derived:com.google.step_count.delta:com.google.android.gms:estimated_steps'
+        },
         { dataTypeName: 'com.google.calories.expended' }
       ],
-      bucketByTime: { durationMillis: 86400000 }, // 1 day buckets
+      bucketByTime: { 
+        period: {
+          type: 'day',
+          value: 1,
+          timeZoneId: Intl.DateTimeFormat().resolvedOptions().timeZone
+        }
+      },
       startTimeMillis: startTime.getTime(),
       endTimeMillis: endTime.getTime()
     };
