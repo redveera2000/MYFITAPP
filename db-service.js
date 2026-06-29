@@ -462,6 +462,118 @@ class FirestoreService {
   }
 
   // ─────────────────────────────────────────────────────────────
+  // STEP LOGS (Daily Activity Tracking — Google Fit / Manual)
+  // ─────────────────────────────────────────────────────────────
+
+  /**
+   * Save or update a step log entry
+   * @param {Object} stepData - { date, steps, distance_km, calories, heartRate, source }
+   */
+  async saveStepLog(stepData) {
+    if (!this.isReady()) return;
+    try {
+      const docId = stepData.date; // YYYY-MM-DD
+      await this.db.collection('users').doc(this.uid)
+        .collection('step_logs').doc(docId).set({
+          date: stepData.date,
+          steps: stepData.steps || 0,
+          distance_km: stepData.distance_km || null,
+          calories: stepData.calories || null,
+          heartRate: stepData.heartRate || null,
+          source: stepData.source || 'manual',
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+      console.log(`[DB] Step log saved: ${stepData.steps} steps on ${stepData.date}`);
+    } catch (error) {
+      console.error('[DB] Error saving step log:', error);
+    }
+  }
+
+  /**
+   * Load all step logs from Firestore
+   * @returns {Array} Array of step log objects sorted chronologically
+   */
+  async loadStepLogs() {
+    if (!this.isReady()) return null;
+    try {
+      const snapshot = await this.db.collection('users').doc(this.uid)
+        .collection('step_logs')
+        .orderBy('date', 'asc')
+        .get();
+
+      if (snapshot.empty) return [];
+
+      const logs = [];
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        logs.push({
+          date: data.date,
+          steps: data.steps || 0,
+          distance_km: data.distance_km || null,
+          calories: data.calories || null,
+          heartRate: data.heartRate || null,
+          source: data.source || 'manual'
+        });
+      });
+
+      console.log(`[DB] ${logs.length} step logs loaded.`);
+      return logs;
+    } catch (error) {
+      console.error('[DB] Error loading step logs:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Save all step logs in bulk (used during CSV import)
+   */
+  async saveAllStepLogs(stepLogs) {
+    if (!this.isReady() || !stepLogs || stepLogs.length === 0) return;
+    try {
+      // Firestore batch limit is 500 operations
+      const batchSize = 450;
+      for (let i = 0; i < stepLogs.length; i += batchSize) {
+        const batch = this.db.batch();
+        const chunk = stepLogs.slice(i, i + batchSize);
+        const logsRef = this.db.collection('users').doc(this.uid).collection('step_logs');
+
+        chunk.forEach(log => {
+          const docRef = logsRef.doc(log.date);
+          batch.set(docRef, {
+            date: log.date,
+            steps: log.steps || 0,
+            distance_km: log.distance_km || null,
+            calories: log.calories || null,
+            heartRate: log.heartRate || null,
+            source: log.source || 'csv_import',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
+        });
+
+        await batch.commit();
+      }
+      console.log(`[DB] ${stepLogs.length} step logs saved in bulk.`);
+    } catch (error) {
+      console.error('[DB] Error bulk saving step logs:', error);
+    }
+  }
+
+  /**
+   * Delete a step log entry
+   */
+  async deleteStepLog(date) {
+    if (!this.isReady()) return;
+    try {
+      await this.db.collection('users').doc(this.uid)
+        .collection('step_logs').doc(date).delete();
+      console.log(`[DB] Step log deleted: ${date}`);
+    } catch (error) {
+      console.error(`[DB] Error deleting step log ${date}:`, error);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
   // DATA MIGRATION (localStorage → Firestore)
   // ─────────────────────────────────────────────────────────────
 

@@ -4,6 +4,24 @@ All notable changes to the AESTHETIX V-TRACK fitness tracker will be documented 
 
 ---
 
+## [1.10.0] - 2026-06-29
+### Added — Google Fit Activity Tracker (Step Count Integration)
+- **👟 Daily Activity Tracker**: Added a comprehensive step counter section to the **Insights & Recovery** tab, allowing users to track daily steps, distance walked, active calories burned, and average heart rate — all sourced from Google Fit data.
+- **📊 Step Count Trend Chart**: Built a 14-day step count bar chart (Chart.js) with dynamic color-coding that visually distinguishes **training days** (cyan) from **rest days** (purple), with a dashed 10,000-step daily goal line overlay.
+- **📈 Activity Summary Cards**: Six glassmorphic stat cards display Today's Steps (with goal percentage), 7-Day Average, Distance, Active Calories, Heart Rate, and Total Days Tracked — all updated in real-time.
+- **📥 Google Takeout CSV Import**: Added a dedicated CSV file import system that parses Google Fit's "Daily Summaries.csv" export from [Google Takeout](https://takeout.google.com). Supports multiple date formats (YYYY-MM-DD, MM/DD/YYYY, DD-MM-YYYY), auto-detects columns, converts distance from meters to km, and bulk-imports with deduplication.
+- **✏️ Manual Step Entry Form**: Added a manual step log form in the Insights tab for users to enter daily steps, distance, calories, and heart rate directly.
+- **☁️ Firestore Step Logs Collection**: New `step_logs` subcollection under each user document in Cloud Firestore with full CRUD operations, bulk import, and dual-write (localStorage + Firestore) architecture matching the existing data patterns.
+- **🔄 Export/Import Integration**: Step logs are now included in the JSON backup export and restore cycle.
+- **💡 Progress Bar**: Dynamic daily goal progress bar with animated shimmer effect and color-coded feedback (red → amber → green).
+
+### Changed
+- **Cache-busting**: Bumped all asset imports in `index.html` to `?v=1.10.0` to force cache refresh.
+- **Docker Compose**: Bumped default production docker image tag to `1.10.0`.
+- **Version Header**: Updated the visual version indicator to `v1.10.0`.
+
+---
+
 ## [1.9.3] - 2026-06-28
 ### Fixed
 - **Timer Firestore Sync:** Fixed a critical bug where `durationSeconds` (Workout Timer) was not being saved to or loaded from the cloud Firestore database, causing the timer data to be lost upon browser refresh or logging in on a new device.
