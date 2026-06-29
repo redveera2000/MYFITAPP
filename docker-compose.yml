@@ -1,7 +1,7 @@
 services:
   vtrack:
     build: .
-    image: ghcr.io/redveera2000/aesthetix-v-track:1.9.3
+    image: ghcr.io/redveera2000/aesthetix-v-track:1.10.0
     container_name: ${CONTAINER_NAME:-vtrack-app}
     restart: unless-stopped
     ports:
@@ -21,3 +21,4 @@ services:
       - FIREBASE_APP_ID=${FIREBASE_APP_ID}
       - SINGLE_USER_EMAIL=${SINGLE_USER_EMAIL:-veeradinesh219@gmail.com}
       - SINGLE_USER_PASSWORD=${SINGLE_USER_PASSWORD:-vtrackDefaultPassword123!}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}

@@ -25,6 +25,11 @@ service cloud.firestore {
       match /weight_logs/{logId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
+
+      // Step logs subcollection (Google Fit / Manual activity data)
+      match /step_logs/{logId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
 
     // Deny everything else by default

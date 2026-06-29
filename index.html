@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AESTHETIX // Premium Workout Tracker & Progressive Overload Engine</title>
   <meta name="description" content="Personalized fitness tracker and progressive overload assistant for Veeradinesh's 6-day workout split, optimized for strength training and body composition.">
-  <link rel="stylesheet" href="index.css?v=1.9.0">
+  <link rel="stylesheet" href="index.css?v=1.10.0">
   <!-- Firebase SDK (CDN Compat - No bundler required) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -22,7 +22,7 @@
       <div class="brand-wrapper">
         <div class="brand-logo">Aesthetix</div>
         <div>
-          <span class="brand-subtitle">V-Track Engine v1.8.0</span>
+          <span class="brand-subtitle">V-Track Engine v1.10.0</span>
         </div>
       </div>
       <div class="user-quick-profile">
@@ -209,6 +209,173 @@
             <canvas id="insights-volume-chart"></canvas>
           </div>
         </div>
+
+        <!-- ═══════════════════════════════════════════════════ -->
+        <!-- GOOGLE FIT ACTIVITY TRACKER SECTION                -->
+        <!-- ═══════════════════════════════════════════════════ -->
+        <div id="step-insights-container" class="step-tracker-section" style="margin-top: 32px;">
+          <div class="step-section-header">
+            <div class="step-header-left">
+              <span class="step-header-icon">👟</span>
+              <h3 class="widget-title" style="margin: 0;">Daily Activity Tracker</h3>
+            </div>
+            <span class="step-source-badge" title="Import data from Google Fit via CSV or enter manually">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+              Google Fit
+            </span>
+          </div>
+
+          <!-- Today's Activity Summary Cards -->
+          <div class="step-stats-grid">
+            <div class="step-stat-card step-stat-primary">
+              <span class="step-stat-icon">🚶</span>
+              <div class="step-stat-content">
+                <span class="step-stat-label">Today's Steps</span>
+                <span class="step-stat-value glow-txt" id="step-today-count">0</span>
+              </div>
+              <span class="step-stat-pct" id="step-today-goal-pct" title="Progress towards 10,000 step goal">0%</span>
+            </div>
+            <div class="step-stat-card">
+              <span class="step-stat-icon">📊</span>
+              <div class="step-stat-content">
+                <span class="step-stat-label">7-Day Avg</span>
+                <span class="step-stat-value" id="step-avg-7d">0</span>
+              </div>
+            </div>
+            <div class="step-stat-card">
+              <span class="step-stat-icon">📍</span>
+              <div class="step-stat-content">
+                <span class="step-stat-label">Distance</span>
+                <span class="step-stat-value" id="step-today-distance">—</span>
+              </div>
+            </div>
+            <div class="step-stat-card">
+              <span class="step-stat-icon">🔥</span>
+              <div class="step-stat-content">
+                <span class="step-stat-label">Active Calories</span>
+                <span class="step-stat-value" id="step-today-calories">—</span>
+              </div>
+            </div>
+            <div class="step-stat-card">
+              <span class="step-stat-icon">💓</span>
+              <div class="step-stat-content">
+                <span class="step-stat-label">Heart Rate</span>
+                <span class="step-stat-value" id="step-today-hr">—</span>
+              </div>
+            </div>
+            <div class="step-stat-card">
+              <span class="step-stat-icon">📅</span>
+              <div class="step-stat-content">
+                <span class="step-stat-label">Total Days Tracked</span>
+                <span class="step-stat-value" id="step-total-days">0</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step Goal Progress Bar -->
+          <div class="step-progress-container">
+            <div class="step-progress-label">
+              <span>Daily Goal Progress</span>
+              <span style="color: var(--text-muted); font-size: 12px;">Target: 10,000 steps</span>
+            </div>
+            <div class="step-progress-track">
+              <div class="step-progress-fill" id="step-progress-fill"></div>
+            </div>
+          </div>
+
+          <!-- 14-Day Step Trend Chart -->
+          <div class="glass-panel" style="margin-top: 20px;">
+            <h3 class="widget-title">Step Count Trend (Last 14 Days)</h3>
+            <p style="font-size: 12.5px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.4;">
+              <span style="display: inline-block; width: 10px; height: 10px; background: rgba(102, 252, 241, 0.4); border: 1.5px solid #66FCF1; border-radius: 2px; margin-right: 4px;"></span> Training Days
+              &nbsp;&nbsp;
+              <span style="display: inline-block; width: 10px; height: 10px; background: rgba(155, 89, 182, 0.4); border: 1.5px solid #9b59b6; border-radius: 2px; margin-right: 4px;"></span> Rest Days
+            </p>
+            <div class="chart-container" style="height: 280px;">
+              <canvas id="step-trend-chart"></canvas>
+            </div>
+          </div>
+
+          <!-- Manual Entry + CSV Import -->
+          <div class="dashboard-layout" style="margin-top: 20px;">
+            <!-- Manual Entry Form -->
+            <div class="glass-panel">
+              <h3 class="widget-title" style="font-size: 15px;">Log Steps Manually</h3>
+              <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">Manually enter your daily activity data if not importing from Google Takeout.</p>
+              
+              <div class="form-group">
+                <label for="step-log-date">Date</label>
+                <input type="date" id="step-log-date" class="form-control">
+              </div>
+              <div class="form-row" style="display: flex; gap: 10px;">
+                <div class="form-group" style="flex: 1;">
+                  <label for="step-log-steps">Steps *</label>
+                  <input type="number" id="step-log-steps" class="form-control" placeholder="e.g. 8500" min="0">
+                </div>
+                <div class="form-group" style="flex: 1;">
+                  <label for="step-log-distance">Distance (km)</label>
+                  <input type="number" id="step-log-distance" class="form-control" step="0.1" placeholder="e.g. 6.2" min="0">
+                </div>
+              </div>
+              <div class="form-row" style="display: flex; gap: 10px;">
+                <div class="form-group" style="flex: 1;">
+                  <label for="step-log-calories">Calories (kcal)</label>
+                  <input type="number" id="step-log-calories" class="form-control" placeholder="e.g. 312" min="0">
+                </div>
+                <div class="form-group" style="flex: 1;">
+                  <label for="step-log-hr">Avg Heart Rate</label>
+                  <input type="number" id="step-log-hr" class="form-control" placeholder="e.g. 82" min="0">
+                </div>
+              </div>
+              <button id="step-log-submit-btn" class="btn" onclick="logManualSteps()">Log Activity</button>
+            </div>
+
+            <!-- CSV Import Panel -->
+            <div class="glass-panel">
+              <h3 class="widget-title" style="font-size: 15px;">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 6px;"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                Import from Google Takeout
+              </h3>
+              <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 15px; line-height: 1.5;">
+                Export your step data from Google Fit using Google Takeout and import the CSV here.
+              </p>
+              
+              <div class="research-tip-box" style="margin-bottom: 15px;">
+                <h4 style="font-size: 13px;">How to Export from Google Fit:</h4>
+                <ol style="font-size: 12px; color: var(--text-secondary); margin: 8px 0 0 18px; line-height: 1.7;">
+                  <li>Go to <strong><a href="https://takeout.google.com" target="_blank" rel="noopener" style="color: var(--accent-primary);">takeout.google.com</a></strong></li>
+                  <li>Click <strong>"Deselect all"</strong>, then check only <strong>"Fit"</strong></li>
+                  <li>Click <strong>"Next step"</strong> → Choose delivery method → <strong>"Create export"</strong></li>
+                  <li>Download the archive and find <strong>"Daily Summaries.csv"</strong> inside the Fit folder</li>
+                  <li>Upload that CSV file below</li>
+                </ol>
+              </div>
+
+              <div class="step-csv-import-area">
+                <div class="step-csv-drop-zone" id="step-csv-drop-zone">
+                  <svg width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="color: var(--accent-secondary); margin-bottom: 8px;">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 8h6m-5 0a3 3 0 110 6H9l3 3-3 3"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 12v9m0-9l-3 3m3-3l3 3M3 7V5a2 2 0 012-2h14a2 2 0 012 2v2"/>
+                  </svg>
+                  <span style="font-size: 13px; color: var(--text-secondary);">Click to select CSV file</span>
+                  <span style="font-size: 11px; color: var(--text-muted);">Supports Google Takeout "Daily Summaries.csv"</span>
+                  <input type="file" accept=".csv,.txt" id="step-csv-input" onchange="importStepCSV(event)" style="position: absolute; inset: 0; opacity: 0; cursor: pointer;">
+                </div>
+              </div>
+
+              <div class="research-tip-box" style="margin-top: 15px; border-left-color: var(--accent-primary); text-align: center;">
+                <h4 style="font-size: 13px; color: var(--accent-primary); margin-bottom: 10px;">Google Health Auto-Sync</h4>
+                <p style="font-size: 11.5px; color: var(--text-muted); margin: 0 0 15px 0; line-height: 1.5;">
+                  Automatically fetch your last 14 days of activity directly from Google Fit.
+                </p>
+                <button id="btn-sync-fit" class="btn" style="width: 100%; background: #4285F4; border-color: #4285F4; color: #fff;" onclick="requestGoogleFitSync()">
+                  Sync with Google Fit
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </section>
 
       <!-- 2. TRACKER TAB -->
@@ -639,8 +806,8 @@ function doGet() {
   </div>
 
   <!-- Firebase Configuration & Database Service -->
-  <script src="firebase-config.js?v=1.9.0"></script>
-  <script src="db-service.js?v=1.9.0"></script>
+  <script src="firebase-config.js?v=1.10.0"></script>
+  <script src="db-service.js?v=1.10.0"></script>
   <!-- Weight Gatekeeper Modal -->
   <div id="weight-gatekeeper-modal" class="modal-overlay" style="display: none; z-index: 10000; position: fixed; inset: 0; background: rgba(10, 15, 22, 0.85); backdrop-filter: blur(8px); justify-content: center; align-items: center;">
     <div class="modal-content glass-panel" style="max-width: 400px; padding: 30px; text-align: center;">
@@ -658,6 +825,12 @@ function doGet() {
     </div>
   </div>
 
-  <script src="app.js?v=1.9.0"></script>
+  <script src="app.js?v=1.10.0"></script>
+  
+  <!-- Load Health API (Google Fit) before main app logic -->
+  <script src="health-api.js?v=1.10.5"></script>
+  
+  <!-- Main Application Logic -->
+  <script src="https://accounts.google.com/gsi/client" onload="initGoogleIdentityServices()" async defer></script>
 </body>
 </html>

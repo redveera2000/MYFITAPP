@@ -32,6 +32,7 @@ jobs:
             echo "FIREBASE_APP_ID=${{ secrets.FIREBASE_APP_ID }}" >> .env
             echo "SINGLE_USER_EMAIL=${{ secrets.SINGLE_USER_EMAIL }}" >> .env
             echo "SINGLE_USER_PASSWORD=${{ secrets.SINGLE_USER_PASSWORD }}" >> .env
+            echo "GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}" >> .env
             echo "CONTAINER_NAME=vtrack-app" >> .env
             echo "VTRACK_PORT=80" >> .env
             

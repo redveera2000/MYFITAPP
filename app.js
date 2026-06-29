@@ -165,6 +165,10 @@ class StateManager {
       });
     }
 
+    // Initialize Step Logs (Google Fit / Manual)
+    const stepLogsJson = localStorage.getItem(this.keyPrefix + "step_logs");
+    this.stepLogs = stepLogsJson ? JSON.parse(stepLogsJson) : [];
+
     // Initialize Active Timers
     this.activeTimers = JSON.parse(localStorage.getItem(this.keyPrefix + "active_timers")) || {};
   }
@@ -289,11 +293,12 @@ class StateManager {
 
     try {
       // Fetch all data concurrently to prevent sequential bottlenecks
-      const [cloudProfile, cloudWeights, cloudHistory, cloudWeightLogs] = await Promise.all([
+      const [cloudProfile, cloudWeights, cloudHistory, cloudWeightLogs, cloudStepLogs] = await Promise.all([
         firestoreService.loadProfile(),
         firestoreService.loadExerciseTargets(),
         firestoreService.loadWorkoutHistory(),
-        firestoreService.loadWeightLogs()
+        firestoreService.loadWeightLogs(),
+        firestoreService.loadStepLogs()
       ]);
 
       // Process profile
@@ -328,6 +333,12 @@ class StateManager {
       if (cloudWeightLogs && cloudWeightLogs.length > 0) {
         this.weightLogs = cloudWeightLogs;
         this.saveWeightLogs();
+      }
+
+      // Process step logs
+      if (cloudStepLogs && cloudStepLogs.length > 0) {
+        this.stepLogs = cloudStepLogs;
+        this.saveStepLogs();
       }
 
       console.log('[StateManager] All data loaded from Firestore.');
@@ -371,6 +382,51 @@ class StateManager {
 
   saveWeightLogs() {
     localStorage.setItem(this.keyPrefix + "weight_logs", JSON.stringify(this.weightLogs));
+  }
+
+  saveStepLogs() {
+    localStorage.setItem(this.keyPrefix + "step_logs", JSON.stringify(this.stepLogs));
+  }
+
+  /**
+   * Save a single step log entry (date, steps, distance, calories, heartRate, source)
+   * Merges into existing stepLogs array, syncs to Firestore
+   */
+  saveStepLog(stepData) {
+    // Merge or insert
+    const idx = this.stepLogs.findIndex(l => l.date === stepData.date);
+    if (idx >= 0) {
+      this.stepLogs[idx] = { ...this.stepLogs[idx], ...stepData };
+    } else {
+      this.stepLogs.push(stepData);
+      // Keep sorted by date
+      this.stepLogs.sort((a, b) => a.date.localeCompare(b.date));
+    }
+    this.saveStepLogs();
+
+    // Dual-write to Firestore
+    if (this.firebaseInitialized && firestoreService && firestoreService.isReady()) {
+      firestoreService.saveStepLog(stepData).catch(err => console.error('[Sync] Step log save error:', err));
+    }
+  }
+
+  /**
+   * Bulk import step logs (from CSV), deduplicating by date
+   */
+  bulkImportStepLogs(newLogs) {
+    const dateMap = {};
+    // Existing logs first
+    this.stepLogs.forEach(l => { dateMap[l.date] = l; });
+    // New logs overwrite or merge
+    newLogs.forEach(l => { dateMap[l.date] = { ...(dateMap[l.date] || {}), ...l }; });
+    // Rebuild sorted array
+    this.stepLogs = Object.values(dateMap).sort((a, b) => a.date.localeCompare(b.date));
+    this.saveStepLogs();
+
+    // Bulk sync to Firestore
+    if (this.firebaseInitialized && firestoreService && firestoreService.isReady()) {
+      firestoreService.saveAllStepLogs(newLogs).catch(err => console.error('[Sync] Bulk step logs save error:', err));
+    }
   }
 
   saveActiveTimers() {
@@ -1328,6 +1384,11 @@ document.addEventListener("DOMContentLoaded", () => {
   
   // Phase 1.5: Render Smart Coach Alerts from local data
   renderCoachAlerts();
+
+  // Phase 1.6: Initialize Step Tracker date and render from local data
+  const stepDateInput = document.getElementById('step-log-date');
+  if (stepDateInput) stepDateInput.value = getLocalDateString();
+  renderStepInsights();
   
   // Initialize secure Auth UI handlers (Login inputs, buttons, errors, spinners)
   initAuthUI();
@@ -1529,6 +1590,7 @@ function refreshAllUI() {
     renderActiveWorkout();
     buildCharts();
     renderCoachAlerts();
+    renderStepInsights();
   } catch (err) {
     console.error('[UI] Error refreshing UI:', err);
   }
@@ -1600,6 +1662,7 @@ function initTabs() {
         setTimeout(buildCharts, 50);
       } else if (tabId === "insights-tab") {
         setTimeout(renderInsightsTab, 50);
+        setTimeout(renderStepInsights, 50);
       }
     });
   });
@@ -3071,7 +3134,8 @@ function exportData() {
     profile: appState.profile,
     currentWeights: appState.currentWeights,
     history: appState.history,
-    weightLogs: appState.weightLogs
+    weightLogs: appState.weightLogs,
+    stepLogs: appState.stepLogs
   }));
   const dlAnchorElem = document.createElement('a');
   dlAnchorElem.setAttribute("href", dataStr);
@@ -3317,6 +3381,378 @@ function renderInsightsChart(volumeData) {
         },
         x: {
           grid: { display: false }
+        }
+      }
+    }
+  });
+}
+
+// ==========================================
+// Step Count / Activity Tracking Logic
+// ==========================================
+
+let stepTrendChartInstance = null;
+const STEP_GOAL_DEFAULT = 10000;
+
+/**
+ * Parse Google Takeout CSV file for step count data.
+ * Supports the "Daily Summaries.csv" format from Google Takeout Fit export.
+ * Expected columns include: Date, Move Minutes, Calories, Distance, Heart Points, Steps, etc.
+ * Also supports simple CSVs with columns: date, steps, distance, calories, heart_rate
+ */
+function parseGoogleTakeoutCSV(csvText) {
+  const lines = csvText.trim().split('\n');
+  if (lines.length < 2) return [];
+
+  // Parse header row
+  const headerLine = lines[0].toLowerCase().replace(/["']/g, '').trim();
+  const headers = headerLine.split(',').map(h => h.trim());
+
+  // Detect column indices — support multiple naming conventions
+  const dateIdx = headers.findIndex(h => h === 'date' || h === 'day' || h === 'start date');
+  const stepsIdx = headers.findIndex(h => h === 'steps' || h === 'step count' || h === 'step_count');
+  const distIdx = headers.findIndex(h => h.includes('distance') || h === 'distance_km' || h === 'distance (m)');
+  const calIdx = headers.findIndex(h => h === 'calories' || h === 'calories (kcal)' || h === 'active calories');
+  const hrIdx = headers.findIndex(h => h.includes('heart') || h === 'heart_rate' || h === 'average heart rate') ;
+
+  if (dateIdx === -1 || stepsIdx === -1) {
+    console.error('[CSV Parser] Could not find required "date" and "steps" columns in CSV.');
+    return [];
+  }
+
+  const results = [];
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+
+    // Handle quoted CSV fields
+    const fields = line.match(/(?:"[^"]*"|[^,]*)(?:,|$)/g)
+      ?.map(f => f.replace(/,$/, '').replace(/^"|"$/g, '').trim()) || line.split(',').map(f => f.trim());
+
+    if (fields.length <= Math.max(dateIdx, stepsIdx)) continue;
+
+    let rawDate = fields[dateIdx];
+    const steps = parseInt(fields[stepsIdx], 10);
+
+    if (!rawDate || isNaN(steps)) continue;
+
+    // Normalize date to YYYY-MM-DD
+    let normalizedDate = normalizeCSVDate(rawDate);
+    if (!normalizedDate) continue;
+
+    const entry = {
+      date: normalizedDate,
+      steps: steps,
+      source: 'csv_import'
+    };
+
+    // Parse optional fields
+    if (distIdx >= 0 && fields[distIdx]) {
+      let dist = parseFloat(fields[distIdx]);
+      if (!isNaN(dist)) {
+        // If distance > 1000, assume it's in meters and convert to km
+        entry.distance_km = dist > 1000 ? parseFloat((dist / 1000).toFixed(2)) : dist;
+      }
+    }
+    if (calIdx >= 0 && fields[calIdx]) {
+      const cal = parseInt(fields[calIdx], 10);
+      if (!isNaN(cal)) entry.calories = cal;
+    }
+    if (hrIdx >= 0 && fields[hrIdx]) {
+      const hr = parseInt(fields[hrIdx], 10);
+      if (!isNaN(hr) && hr > 0) entry.heartRate = hr;
+    }
+
+    results.push(entry);
+  }
+
+  return results;
+}
+
+/**
+ * Normalize various date formats to YYYY-MM-DD
+ */
+function normalizeCSVDate(raw) {
+  // Already YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  // MM/DD/YYYY or M/D/YYYY
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(raw)) {
+    const [m, d, y] = raw.split('/');
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+  // DD-MM-YYYY
+  if (/^\d{2}-\d{2}-\d{4}$/.test(raw)) {
+    const [d, m, y] = raw.split('-');
+    return `${y}-${m}-${d}`;
+  }
+  // Try JS Date parse as fallback
+  try {
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) {
+      return d.toISOString().split('T')[0];
+    }
+  } catch (e) { /* ignore */ }
+  return null;
+}
+
+/**
+ * Handle Google Takeout CSV file import
+ */
+function importStepCSV(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const csvText = e.target.result;
+      const parsedLogs = parseGoogleTakeoutCSV(csvText);
+
+      if (parsedLogs.length === 0) {
+        alert('No valid step data found in the CSV file.\n\nExpected columns: date, steps (and optionally: distance, calories, heart_rate).\n\nMake sure your Google Takeout export contains the "Daily Summaries.csv" file.');
+        return;
+      }
+
+      appState.bulkImportStepLogs(parsedLogs);
+      renderStepInsights();
+
+      // Clear file input
+      event.target.value = '';
+
+      alert(`✅ Successfully imported ${parsedLogs.length} days of step data!\n\nDate range: ${parsedLogs[0].date} → ${parsedLogs[parsedLogs.length - 1].date}`);
+    } catch (err) {
+      console.error('[Step CSV Import Error]', err);
+      alert('Error parsing CSV file. Please ensure it is a valid Google Takeout export.');
+    }
+  };
+  reader.readAsText(file);
+}
+
+/**
+ * Handle manual step log entry from the Insights tab form
+ */
+function logManualSteps() {
+  const dateInput = document.getElementById('step-log-date');
+  const stepsInput = document.getElementById('step-log-steps');
+  const distInput = document.getElementById('step-log-distance');
+  const calInput = document.getElementById('step-log-calories');
+  const hrInput = document.getElementById('step-log-hr');
+
+  if (!dateInput || !stepsInput) return;
+
+  const date = dateInput.value;
+  const steps = parseInt(stepsInput.value, 10);
+
+  if (!date || isNaN(steps) || steps < 0) {
+    alert('Please enter a valid date and step count.');
+    return;
+  }
+
+  const stepData = {
+    date: date,
+    steps: steps,
+    source: 'manual'
+  };
+
+  const dist = parseFloat(distInput?.value);
+  if (!isNaN(dist) && dist > 0) stepData.distance_km = dist;
+
+  const cal = parseInt(calInput?.value, 10);
+  if (!isNaN(cal) && cal > 0) stepData.calories = cal;
+
+  const hr = parseInt(hrInput?.value, 10);
+  if (!isNaN(hr) && hr > 0) stepData.heartRate = hr;
+
+  appState.saveStepLog(stepData);
+  renderStepInsights();
+
+  // Clear form
+  stepsInput.value = '';
+  if (distInput) distInput.value = '';
+  if (calInput) calInput.value = '';
+  if (hrInput) hrInput.value = '';
+
+  // Brief success feedback
+  const btn = document.getElementById('step-log-submit-btn');
+  if (btn) {
+    const orig = btn.textContent;
+    btn.textContent = '✓ Logged!';
+    btn.style.background = 'var(--success-color)';
+    btn.style.color = '#000';
+    setTimeout(() => {
+      btn.textContent = orig;
+      btn.style.background = '';
+      btn.style.color = '';
+    }, 1500);
+  }
+}
+
+/**
+ * Render Step Count Insights on the Insights tab
+ * - Today's stats summary cards
+ * - 14-day step trend chart
+ * - Activity correlation with training days
+ */
+function renderStepInsights() {
+  const container = document.getElementById('step-insights-container');
+  if (!container) return;
+
+  const logs = appState.stepLogs || [];
+  const today = getLocalDateString();
+
+  // Find today's entry
+  const todayLog = logs.find(l => l.date === today);
+  const todaySteps = todayLog ? todayLog.steps : 0;
+  const todayDist = todayLog?.distance_km || null;
+  const todayCal = todayLog?.calories || null;
+  const todayHR = todayLog?.heartRate || null;
+
+  // Calculate progress percentage
+  const progressPct = Math.min((todaySteps / STEP_GOAL_DEFAULT) * 100, 100);
+  const progressColor = progressPct >= 100 ? '#2ecc71' : progressPct >= 60 ? '#f39c12' : '#ff5252';
+
+  // Calculate averages from last 7 days
+  const last7 = logs.filter(l => {
+    const d = new Date(l.date);
+    const now = new Date(today);
+    const diff = (now - d) / (1000 * 60 * 60 * 24);
+    return diff >= 0 && diff < 7;
+  });
+  const avg7Steps = last7.length > 0 ? Math.round(last7.reduce((s, l) => s + l.steps, 0) / last7.length) : 0;
+
+  // Update summary cards
+  const stepsEl = document.getElementById('step-today-count');
+  const goalEl = document.getElementById('step-today-goal-pct');
+  const avgEl = document.getElementById('step-avg-7d');
+  const distEl = document.getElementById('step-today-distance');
+  const calEl = document.getElementById('step-today-calories');
+  const hrEl = document.getElementById('step-today-hr');
+  const progressFill = document.getElementById('step-progress-fill');
+  const totalDaysEl = document.getElementById('step-total-days');
+
+  if (stepsEl) stepsEl.textContent = todaySteps.toLocaleString();
+  if (goalEl) {
+    goalEl.textContent = `${Math.round(progressPct)}%`;
+    goalEl.style.color = progressColor;
+  }
+  if (avgEl) avgEl.textContent = avg7Steps.toLocaleString();
+  if (distEl) distEl.textContent = todayDist !== null ? `${todayDist} km` : '—';
+  if (calEl) calEl.textContent = todayCal !== null ? `${todayCal} kcal` : '—';
+  if (hrEl) hrEl.textContent = todayHR !== null ? `${todayHR} bpm` : '—';
+  if (progressFill) {
+    progressFill.style.width = `${progressPct}%`;
+    progressFill.style.background = `linear-gradient(90deg, ${progressColor}, ${progressPct >= 100 ? '#27ae60' : progressColor}88)`;
+  }
+  if (totalDaysEl) totalDaysEl.textContent = logs.length;
+
+  // Render 14-day trend chart
+  renderStepTrendChart(logs);
+}
+
+/**
+ * Render 14-day step trend chart with training day overlays
+ */
+function renderStepTrendChart(logs) {
+  const canvas = document.getElementById('step-trend-chart');
+  if (!canvas) return;
+
+  if (stepTrendChartInstance) {
+    stepTrendChartInstance.destroy();
+  }
+
+  // Build last 14 days labels + data
+  const today = new Date(getLocalDateString());
+  const labels = [];
+  const stepsData = [];
+  const bgColors = [];
+  const borderColors = [];
+
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().split('T')[0];
+    const dayLabel = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    labels.push(dayLabel);
+
+    const log = logs.find(l => l.date === dateStr);
+    stepsData.push(log ? log.steps : 0);
+
+    // Color training days differently
+    const isTrainingDay = appState.history.some(h => h.date === dateStr);
+    if (isTrainingDay) {
+      bgColors.push('rgba(102, 252, 241, 0.4)');
+      borderColors.push('#66FCF1');
+    } else {
+      bgColors.push('rgba(155, 89, 182, 0.4)');
+      borderColors.push('#9b59b6');
+    }
+  }
+
+  stepTrendChartInstance = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Daily Steps',
+          data: stepsData,
+          backgroundColor: bgColors,
+          borderColor: borderColors,
+          borderWidth: 1.5,
+          borderRadius: 4,
+          barPercentage: 0.7
+        },
+        {
+          label: 'Goal (10,000)',
+          data: Array(14).fill(STEP_GOAL_DEFAULT),
+          type: 'line',
+          borderColor: 'rgba(46, 204, 113, 0.5)',
+          borderWidth: 2,
+          borderDash: [6, 4],
+          pointRadius: 0,
+          fill: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: true,
+          labels: {
+            color: 'rgba(255,255,255,0.7)',
+            font: { size: 11 },
+            boxWidth: 12,
+            padding: 15
+          }
+        },
+        tooltip: {
+          backgroundColor: '#1F2833',
+          borderColor: '#66FCF1',
+          borderWidth: 1,
+          callbacks: {
+            label: function(ctx) {
+              if (ctx.datasetIndex === 1) return 'Goal: 10,000 steps';
+              return `Steps: ${ctx.parsed.y.toLocaleString()}`;
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          grid: { color: 'rgba(255, 255, 255, 0.05)' },
+          ticks: { color: 'rgba(255,255,255,0.6)' },
+          title: { display: true, text: 'Steps', color: 'rgba(255,255,255,0.6)' }
+        },
+        x: {
+          grid: { display: false },
+          ticks: {
+            color: 'rgba(255,255,255,0.6)',
+            maxRotation: 45,
+            font: { size: 10 }
+          }
         }
       }
     }

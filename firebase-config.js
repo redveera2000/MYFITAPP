@@ -25,6 +25,9 @@ const singleUserConfig = {
   password: "${SINGLE_USER_PASSWORD}"
 };
 
+// Google OAuth 2.0 Client ID for Google Fit integration
+const googleClientId = "${GOOGLE_CLIENT_ID}";
+
 // --- Initialize Firebase ---
 let firebaseApp = null;
 let firebaseAuth = null;

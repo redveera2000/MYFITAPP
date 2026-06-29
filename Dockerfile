@@ -12,6 +12,7 @@ COPY nginx/default.conf /etc/nginx/conf.d/default.conf
 COPY index.html /usr/share/nginx/html/
 COPY index.css /usr/share/nginx/html/
 COPY app.js /usr/share/nginx/html/
+COPY health-api.js /usr/share/nginx/html/
 # Copy firebase-config.js as a template for environment variable injection at runtime
 COPY firebase-config.js /usr/share/nginx/html/firebase-config.js.template
 COPY db-service.js /usr/share/nginx/html/
