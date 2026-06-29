@@ -827,8 +827,10 @@ function doGet() {
 
   <script src="app.js?v=1.10.0"></script>
   
-  <!-- Google Health API / Identity Services -->
-  <script src="health-api.js?v=1.10.0"></script>
+  <!-- Load Health API (Google Fit) before main app logic -->
+  <script src="health-api.js?v=1.10.1"></script>
+  
+  <!-- Main Application Logic -->
   <script src="https://accounts.google.com/gsi/client" onload="initGoogleIdentityServices()" async defer></script>
 </body>
 </html>
