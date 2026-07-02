@@ -2206,6 +2206,7 @@ function renderActiveWorkout() {
     const isStrength = ex.category === 'strength';
     card.className = `exercise-log-card glass-panel${isStrength ? ' strength-card' : ''}${isSaved ? ' saved-card' : ''}`;
     card.setAttribute("data-ex-name", ex.name);
+    card.setAttribute("data-ex-type", ex.type || 'dumbbell');
 
     // Generate category and rest badges
     const categoryBadge = getCategoryBadgeHtml(ex);
@@ -2265,7 +2266,7 @@ function renderActiveWorkout() {
           <span class="set-num">Set ${s}</span>
           <div class="set-inputs">
             <div class="input-wrapper">
-              <input type="number" step="0.5" class="set-weight-input" value="${weightVal}" placeholder="kg" ${isSaved ? 'disabled' : ''}>
+              <input type="number" step="${getWeightStep(ex.type)}" class="set-weight-input" value="${weightVal}" placeholder="kg" ${isSaved ? 'disabled' : ''}>
               <span class="input-unit">kg</span>
             </div>
             <div class="input-wrapper">
@@ -2834,7 +2835,7 @@ function renderPlanList() {
           <td data-label="Rest">${restDisplay}</td>
           <td data-label="Target Weight">
             <div class="plan-weight-edit-wrapper">
-              <input type="number" step="0.5" class="plan-weight-edit-input" data-ex-name="${ex.name}" value="${liveData.weight}">
+              <input type="number" step="${getWeightStep(ex.type)}" class="plan-weight-edit-input" data-ex-name="${ex.name}" value="${liveData.weight}">
               <span class="unit">kg</span>
             </div>
           </td>
@@ -3185,9 +3186,15 @@ function importData(event) {
 }
 
 // --- Dynamic Set Helper Functions ---
+function getWeightStep(type) {
+  if (type === 'machine' || type === 'cable') return "5";
+  if (type === 'bodyweight') return "1";
+  return "0.5"; // dumbbell, barbell, default
+}
 function addSetRow(btn) {
   const card = btn.closest(".exercise-log-card");
   const exName = card.getAttribute("data-ex-name");
+  const exType = card.getAttribute("data-ex-type") || 'dumbbell';
   const trackerState = appState.currentWeights[exName];
   const curWeight = trackerState ? trackerState.weight : 0.0;
 
@@ -3207,7 +3214,7 @@ function addSetRow(btn) {
     <span class="set-num">Set ${nextSetNum}</span>
     <div class="set-inputs">
       <div class="input-wrapper">
-        <input type="number" step="0.5" class="set-weight-input" value="${curWeight}" placeholder="kg">
+        <input type="number" step="${getWeightStep(exType)}" class="set-weight-input" value="${curWeight}" placeholder="kg">
         <span class="input-unit">kg</span>
       </div>
       <div class="input-wrapper">
