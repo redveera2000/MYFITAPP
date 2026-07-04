@@ -3260,15 +3260,42 @@ function syncToGoogleSheets(record, url) {
   });
 }
 
+function fallbackCopyTextToClipboard(text, successMsg, failMsg) {
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text)
+      .then(() => alert(successMsg))
+      .catch(err => alert(failMsg + ": " + err));
+  } else {
+    // Fallback for non-HTTPS environments (like HTTP IP addresses)
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.top = "0";
+    textArea.style.left = "0";
+    textArea.style.position = "fixed";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+      const successful = document.execCommand('copy');
+      if (successful) {
+        alert(successMsg);
+      } else {
+        alert(failMsg + ": execCommand returned false");
+      }
+    } catch (err) {
+      alert(failMsg + ": " + err);
+    }
+    document.body.removeChild(textArea);
+  }
+}
+
 function copyAppsScriptCode() {
   const code = document.getElementById("apps-script-code").textContent;
-  navigator.clipboard.writeText(code)
-    .then(() => {
-      alert("Apps Script code copied to clipboard!");
-    })
-    .catch(err => {
-      alert("Failed to copy script code: " + err);
-    });
+  fallbackCopyTextToClipboard(
+    code,
+    "Apps Script code copied to clipboard!",
+    "Failed to copy script code"
+  );
 }
 
 function copyHistoryAsCSV() {
@@ -3289,13 +3316,11 @@ function copyHistoryAsCSV() {
     });
   });
   
-  navigator.clipboard.writeText(csvContent)
-    .then(() => {
-      alert("Workout log history successfully copied as CSV! Go to your Google Sheet and paste (Cmd+V or Ctrl+V) in the top-left cell.");
-    })
-    .catch(err => {
-      alert("Failed to copy CSV content: " + err);
-    });
+  fallbackCopyTextToClipboard(
+    csvContent,
+    "Workout log history successfully copied as CSV! Go to your Google Sheet and paste (Cmd+V or Ctrl+V) in the top-left cell.",
+    "Failed to copy CSV content"
+  );
 }
 
 // ==========================================
