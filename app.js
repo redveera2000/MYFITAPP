@@ -648,11 +648,6 @@ class StateManager {
     const record = this.history.find(log => log.date === dateStr && log.workoutKey === workoutKey);
     if (!record) return;
 
-    // Sync removal to Firestore
-    if (this.firebaseInitialized && firestoreService && firestoreService.isReady()) {
-      firestoreService.removeExerciseLog(record.id, exName).catch(err => console.error('[Sync] Exercise log remove error:', err));
-    }
-
     record.exercises = record.exercises.filter(e => e.name !== exName);
     if (record.exercises.length === 0) {
       // Delete the entire session from Firestore too
@@ -660,6 +655,11 @@ class StateManager {
         firestoreService.deleteWorkoutSession(record.id).catch(err => console.error('[Sync] Session delete error:', err));
       }
       this.history = this.history.filter(log => log.id !== record.id);
+    } else {
+      // Sync the updated exercises array to Firestore
+      if (this.firebaseInitialized && firestoreService && firestoreService.isReady()) {
+        firestoreService.saveWorkoutSession(record).catch(err => console.error('[Sync] Workout session save error:', err));
+      }
     }
     this.saveHistory();
   }
@@ -704,12 +704,7 @@ class StateManager {
 
     // Sync to Firestore
     if (this.firebaseInitialized && firestoreService && firestoreService.isReady()) {
-      if (isNewSession) {
-        firestoreService.saveWorkoutSession(record).catch(err => console.error('[Sync] Workout session save error:', err));
-      } else {
-        firestoreService.saveExerciseLog(record.id, dateStr, workoutKey, exerciseRecord)
-          .catch(err => console.error('[Sync] Exercise log save error:', err));
-      }
+      firestoreService.saveWorkoutSession(record).catch(err => console.error('[Sync] Workout session save error:', err));
     }
 
     // 3. Process Progressive Overloading Rules for this single exercise
