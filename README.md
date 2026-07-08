@@ -96,34 +96,32 @@ http://localhost:8080
 
 ## 🏗 Architecture
 
-```
-┌──────────────────────────────────────────────────────────┐
-│                     BROWSER (Client)                      │
-│                                                          │
-│  index.html ──▶ app.js (142KB, single-file application)  │
-│       │              │                                    │
-│       ├── index.css (Glassmorphic Design System)          │
-│       ├── firebase-config.js (Runtime Config Injection)   │
-│       ├── db-service.js (Firestore CRUD Layer)            │
-│       └── health-api.js (Google Fit OAuth + API)          │
-│                                                          │
-├──────────────────────────────────────────────────────────┤
-│                    FIREBASE (Backend)                      │
-│                                                          │
-│  ┌─────────────┐  ┌──────────────┐  ┌───────────────┐   │
-│  │ Auth        │  │ Firestore DB │  │ Security      │   │
-│  │ (Email/Pwd) │  │ (NoSQL)      │  │ Rules         │   │
-│  └─────────────┘  └──────────────┘  └───────────────┘   │
-│                                                          │
-├──────────────────────────────────────────────────────────┤
-│                  DEPLOYMENT (Docker + Nginx)               │
-│                                                          │
-│  Dockerfile ──▶ nginx:1.27-alpine                        │
-│  docker-compose.yml ──▶ Port mapping + env injection     │
-│  .github/workflows/ ──▶ CI/CD (dev + prod auto-deploy)   │
-│  backup-service/ ──▶ Automated Firestore backups         │
-│                                                          │
-└──────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Browser ["🌐 BROWSER (Client)"]
+        index["index.html"] --> app["app.js (142KB, single-file application)"]
+        index --> css["index.css (Glassmorphic Design System)"]
+        index --> config["firebase-config.js (Runtime Config Injection)"]
+        index --> db["db-service.js (Firestore CRUD Layer)"]
+        index --> health["health-api.js (Google Fit OAuth + API)"]
+    end
+
+    subgraph Firebase ["🔥 FIREBASE (Backend)"]
+        direction LR
+        auth["Auth (Email/Pwd)"]
+        firestore["Firestore DB (NoSQL)"]
+        rules["Security Rules"]
+    end
+
+    subgraph Deployment ["🐳 DEPLOYMENT (Docker + Nginx)"]
+        dockerfile["Dockerfile"] --> nginx["nginx:1.27-alpine"]
+        compose["docker-compose.yml"] --> mapping["Port mapping + env injection"]
+        workflows[".github/workflows/"] --> cicd["CI/CD (dev + prod auto-deploy)"]
+        backup["backup-service/"] --> autobackup["Automated Firestore backups"]
+    end
+
+    config -.-> auth
+    db -.-> firestore
 ```
 
 ### Tech Stack
