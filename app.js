@@ -378,6 +378,9 @@ class StateManager {
 
   saveHistory() {
     localStorage.setItem(this.keyPrefix + "history", JSON.stringify(this.history));
+    if (typeof populateHistoryFilters === 'function') {
+      populateHistoryFilters();
+    }
   }
 
   saveWeightLogs() {
