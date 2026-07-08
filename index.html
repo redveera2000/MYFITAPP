@@ -434,9 +434,21 @@
           <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 20px; line-height: 1.5;">
             Inspect your past logged exercises, completed sets, and volume output. Click the delete button on any card to remove it from history (progressive overload values will remain).
           </p>
-          <div class="form-group" style="position: relative; margin-bottom: 20px;">
-            <input type="text" id="history-search-input" class="form-control" placeholder="Search workouts (e.g. 'Leg Day') or exercises (e.g. 'Leg Press')..." autocomplete="off">
-            <span style="position: absolute; right: 15px; top: 12px; color: var(--text-secondary);">🔍</span>
+          <div class="history-filters" style="display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;">
+            <div class="form-group" style="flex: 1; min-width: 150px; margin-bottom: 0;">
+              <select id="history-filter-workout" class="form-control">
+                <option value="">All Workouts</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex: 1; min-width: 150px; margin-bottom: 0;">
+              <select id="history-filter-exercise" class="form-control">
+                <option value="">All Exercises</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex: 2; min-width: 200px; position: relative; margin-bottom: 0;">
+              <input type="text" id="history-search-input" class="form-control" placeholder="Search (e.g. 'Leg Press')..." autocomplete="off">
+              <span style="position: absolute; right: 15px; top: 12px; color: var(--text-secondary);">🔍</span>
+            </div>
           </div>
           <div id="history-records-container" class="history-records-list">
             <!-- Populated dynamically via app.js -->

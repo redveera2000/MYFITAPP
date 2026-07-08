@@ -378,6 +378,9 @@ class StateManager {
 
   saveHistory() {
     localStorage.setItem(this.keyPrefix + "history", JSON.stringify(this.history));
+    if (typeof populateHistoryFilters === 'function') {
+      populateHistoryFilters();
+    }
   }
 
   saveWeightLogs() {
@@ -1379,13 +1382,26 @@ document.addEventListener("DOMContentLoaded", () => {
   renderPlanList();
   setupAddExerciseModal();
   setupDiscardSessionHandler();
+  populateHistoryFilters();
   renderHistoryTable();
   buildCharts();
   
-  // Phase 1.1: Setup History Search
+  // Phase 1.1: Setup History Search & Filters
   const historySearchInput = document.getElementById("history-search-input");
+  const historyWorkoutFilter = document.getElementById("history-filter-workout");
+  const historyExerciseFilter = document.getElementById("history-filter-exercise");
+  
   if (historySearchInput) {
     historySearchInput.addEventListener("input", renderHistoryTable);
+  }
+  if (historyWorkoutFilter) {
+    historyWorkoutFilter.addEventListener("change", () => {
+      populateHistoryFilters(); // updates the exercise dropdown (cascading)
+      renderHistoryTable();
+    });
+  }
+  if (historyExerciseFilter) {
+    historyExerciseFilter.addEventListener("change", renderHistoryTable);
   }
   
   // Phase 1.5: Render Smart Coach Alerts from local data
@@ -2924,31 +2940,84 @@ function renderPlanList() {
   });
 }
 
+// 6.5 Populate History Dropdown Filters
+function populateHistoryFilters() {
+  const workoutSelect = document.getElementById("history-filter-workout");
+  const exerciseSelect = document.getElementById("history-filter-exercise");
+  if (!workoutSelect || !exerciseSelect) return;
+
+  const currentWorkoutVal = workoutSelect.value;
+  const currentExVal = exerciseSelect.value;
+
+  const uniqueWorkouts = new Set();
+  const uniqueExercises = new Set();
+
+  appState.history.forEach(log => {
+    if (log.workoutName) uniqueWorkouts.add(log.workoutName);
+    
+    // Cascading logic: If a workout is selected, only gather exercises for that workout
+    if (!currentWorkoutVal || log.workoutName === currentWorkoutVal) {
+      if (log.exercises) {
+        log.exercises.forEach(ex => uniqueExercises.add(ex.name));
+      }
+    }
+  });
+
+  // Re-populate Workout dropdown
+  workoutSelect.innerHTML = '<option value="">All Workouts</option>';
+  Array.from(uniqueWorkouts).sort().forEach(w => {
+    workoutSelect.innerHTML += `<option value="${w}" ${w === currentWorkoutVal ? 'selected' : ''}>${w}</option>`;
+  });
+
+  // Re-populate Exercise dropdown
+  exerciseSelect.innerHTML = '<option value="">All Exercises</option>';
+  Array.from(uniqueExercises).sort().forEach(e => {
+    exerciseSelect.innerHTML += `<option value="${e}" ${e === currentExVal ? 'selected' : ''}>${e}</option>`;
+  });
+}
+
 // 7. Render Workout Log History List
 function renderHistoryTable() {
   const container = document.getElementById("history-records-container");
   const searchInput = document.getElementById("history-search-input");
+  const workoutSelect = document.getElementById("history-filter-workout");
+  const exerciseSelect = document.getElementById("history-filter-exercise");
+  
   if (!container) return;
 
   container.innerHTML = "";
   let logs = [...appState.history].reverse(); // newest first
+  
   let query = searchInput ? searchInput.value.trim().toLowerCase() : "";
+  let workoutFilter = workoutSelect ? workoutSelect.value : "";
+  let exerciseFilter = exerciseSelect ? exerciseSelect.value : "";
 
+  // 1. Filter by Workout Dropdown
+  if (workoutFilter) {
+    logs = logs.filter(log => log.workoutName === workoutFilter);
+  }
+
+  // 2. Filter by Exercise Dropdown (Laser-focused)
+  if (exerciseFilter) {
+    logs = logs.reduce((filtered, log) => {
+      const match = log.exercises.filter(ex => ex.name === exerciseFilter);
+      if (match.length > 0) {
+        filtered.push({ ...log, exercises: match });
+      }
+      return filtered;
+    }, []);
+  }
+
+  // 3. Filter by Text Input (Fallback)
   if (query) {
     logs = logs.reduce((filteredLogs, log) => {
       const workoutMatches = log.workoutName && log.workoutName.toLowerCase().includes(query);
-      
       if (workoutMatches) {
-        // If the workout name matches (e.g. "Leg Day"), show the whole card
         filteredLogs.push(log);
       } else {
-        // Otherwise, only show the specific exercises that match
         const matchingExercises = log.exercises.filter(ex => ex.name.toLowerCase().includes(query));
         if (matchingExercises.length > 0) {
-          filteredLogs.push({
-            ...log,
-            exercises: matchingExercises
-          });
+          filteredLogs.push({ ...log, exercises: matchingExercises });
         }
       }
       return filteredLogs;
@@ -2956,8 +3025,8 @@ function renderHistoryTable() {
   }
 
   if (logs.length === 0) {
-    if (query) {
-      container.innerHTML = `<div class="empty-state">No workouts or exercises match your search "${searchInput.value}".</div>`;
+    if (query || workoutFilter || exerciseFilter) {
+      container.innerHTML = `<div class="empty-state">No workouts or exercises match your active filters.</div>`;
     } else {
       container.innerHTML = `<div class="empty-state">No workouts logged yet. Complete a training session to see your history logs!</div>`;
     }
