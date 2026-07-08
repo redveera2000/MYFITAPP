@@ -1382,6 +1382,12 @@ document.addEventListener("DOMContentLoaded", () => {
   renderHistoryTable();
   buildCharts();
   
+  // Phase 1.1: Setup History Search
+  const historySearchInput = document.getElementById("history-search-input");
+  if (historySearchInput) {
+    historySearchInput.addEventListener("input", renderHistoryTable);
+  }
+  
   // Phase 1.5: Render Smart Coach Alerts from local data
   renderCoachAlerts();
 
@@ -2921,13 +2927,40 @@ function renderPlanList() {
 // 7. Render Workout Log History List
 function renderHistoryTable() {
   const container = document.getElementById("history-records-container");
+  const searchInput = document.getElementById("history-search-input");
   if (!container) return;
 
   container.innerHTML = "";
-  const logs = [...appState.history].reverse(); // newest first
+  let logs = [...appState.history].reverse(); // newest first
+  let query = searchInput ? searchInput.value.trim().toLowerCase() : "";
+
+  if (query) {
+    logs = logs.reduce((filteredLogs, log) => {
+      const workoutMatches = log.workoutName && log.workoutName.toLowerCase().includes(query);
+      
+      if (workoutMatches) {
+        // If the workout name matches (e.g. "Leg Day"), show the whole card
+        filteredLogs.push(log);
+      } else {
+        // Otherwise, only show the specific exercises that match
+        const matchingExercises = log.exercises.filter(ex => ex.name.toLowerCase().includes(query));
+        if (matchingExercises.length > 0) {
+          filteredLogs.push({
+            ...log,
+            exercises: matchingExercises
+          });
+        }
+      }
+      return filteredLogs;
+    }, []);
+  }
 
   if (logs.length === 0) {
-    container.innerHTML = `<div class="empty-state">No workouts logged yet. Complete a training session to see your history logs!</div>`;
+    if (query) {
+      container.innerHTML = `<div class="empty-state">No workouts or exercises match your search "${searchInput.value}".</div>`;
+    } else {
+      container.innerHTML = `<div class="empty-state">No workouts logged yet. Complete a training session to see your history logs!</div>`;
+    }
     return;
   }
 
