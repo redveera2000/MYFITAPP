@@ -218,7 +218,7 @@ class FirestoreService {
       // Determine status
       const status = this._getSessionStatus(sessionData);
 
-      // Write session document
+      // Write session document (Denormalized with exercises)
       await sessionRef.set({
         date: sessionData.date,
         workoutKey: sessionData.workoutKey,
@@ -226,26 +226,10 @@ class FirestoreService {
         status: status,
         totalVolume: totalVolume,
         durationSeconds: sessionData.durationSeconds || null,
+        exercises: sessionData.exercises || [], // Denormalized for instant loading
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
-
-      // Write exercise logs as subcollection documents
-      if (sessionData.exercises && sessionData.exercises.length > 0) {
-        const batch = this.db.batch();
-        sessionData.exercises.forEach(ex => {
-          const logDocId = this._sanitizeDocId(ex.name);
-          const logRef = sessionRef.collection('exercise_logs').doc(logDocId);
-          batch.set(logRef, {
-            exerciseName: ex.name,
-            date: sessionData.date,
-            workoutKey: sessionData.workoutKey,
-            sets: ex.sets || [],
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-          }, { merge: true });
-        });
-        await batch.commit();
-      }
 
       setSyncStatus('synced');
       console.log(`[DB] Workout session saved: ${sessionData.workoutName} (${sessionData.date})`);
@@ -255,51 +239,6 @@ class FirestoreService {
     }
   }
 
-  /**
-   * Save a single exercise log within an existing session
-   */
-  async saveExerciseLog(sessionId, date, workoutKey, exerciseLog) {
-    if (!this.isReady()) return;
-    try {
-      const sessionRef = this.db.collection('users').doc(this.uid)
-        .collection('workout_sessions').doc(sessionId);
-
-      const logDocId = this._sanitizeDocId(exerciseLog.name);
-      await sessionRef.collection('exercise_logs').doc(logDocId).set({
-        exerciseName: exerciseLog.name,
-        date: date,
-        workoutKey: workoutKey,
-        sets: exerciseLog.sets || [],
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
-
-      // Also update session's updatedAt timestamp
-      await sessionRef.set({
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
-
-      console.log(`[DB] Exercise log saved: ${exerciseLog.name}`);
-    } catch (error) {
-      console.error(`[DB] Error saving exercise log ${exerciseLog.name}:`, error);
-    }
-  }
-
-  /**
-   * Remove a single exercise log from a session
-   */
-  async removeExerciseLog(sessionId, exerciseName) {
-    if (!this.isReady()) return;
-    try {
-      const logDocId = this._sanitizeDocId(exerciseName);
-      await this.db.collection('users').doc(this.uid)
-        .collection('workout_sessions').doc(sessionId)
-        .collection('exercise_logs').doc(logDocId).delete();
-
-      console.log(`[DB] Exercise log removed: ${exerciseName}`);
-    } catch (error) {
-      console.error(`[DB] Error removing exercise log ${exerciseName}:`, error);
-    }
-  }
 
   /**
    * Load all workout session history from Firestore
@@ -317,32 +256,37 @@ class FirestoreService {
 
       if (sessionsSnapshot.empty) return [];
 
-      const history = [];
-      for (const sessionDoc of sessionsSnapshot.docs) {
+      // Use Promise.all to fetch subcollections concurrently (fixes N+1 sequential bottleneck)
+      const history = await Promise.all(sessionsSnapshot.docs.map(async (sessionDoc) => {
         const sessionData = sessionDoc.data();
+        let exercises = [];
 
-        // Load exercise logs for this session
-        const logsSnapshot = await sessionDoc.ref
-          .collection('exercise_logs').get();
+        // 1. Fast Path: Check if data is denormalized (New Format)
+        if (sessionData.exercises) {
+           exercises = sessionData.exercises;
+        } else {
+           // 2. Fallback Path: Fetch legacy subcollection data (concurrently!)
+           const logsSnapshot = await sessionDoc.ref.collection('exercise_logs').get();
+           logsSnapshot.forEach(logDoc => {
+             const logData = logDoc.data();
+             exercises.push({
+               name: logData.exerciseName || logData.name,
+               sets: logData.sets || []
+             });
+           });
+        }
 
-        const exercises = [];
-        logsSnapshot.forEach(logDoc => {
-          const logData = logDoc.data();
-          exercises.push({
-            name: logData.exerciseName,
-            sets: logData.sets || []
-          });
-        });
-
-        history.push({
+        return {
           id: sessionDoc.id,
           date: sessionData.date,
           workoutKey: sessionData.workoutKey,
           workoutName: sessionData.workoutName,
+          status: sessionData.status,
+          totalVolume: sessionData.totalVolume,
           durationSeconds: sessionData.durationSeconds || null,
           exercises: exercises
-        });
-      }
+        };
+      }));
 
       console.log(`[DB] ${history.length} workout sessions loaded.`);
       return history;
