@@ -1,0 +1,130 @@
+name: 🔍 PR Validation Checks
+
+on:
+  pull_request:
+    branches: [ development, main ]
+
+jobs:
+  validate:
+    name: 🏗️ Build & Validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🔒 Security Scan
+        run: |
+          echo "🔍 Scanning for exposed secrets..."
+          FOUND_ISSUES=0
+
+          # Check for Firebase API key patterns in source code
+          if grep -rn 'AIza[0-9A-Za-z_-]\{35\}' --include='*.js' --include='*.html' --include='*.json' . 2>/dev/null | grep -v '.env' | grep -v 'node_modules' | grep -v '.example'; then
+            echo "❌ Possible Firebase API key found in source code!"
+            FOUND_ISSUES=1
+          fi
+
+          # Check for hardcoded email/password pairs
+          if grep -rn 'SINGLE_USER_PASSWORD=.\+' --include='*.js' --include='*.html' . 2>/dev/null | grep -v '.env' | grep -v '.example' | grep -v 'TEMPLATE' | grep -v 'template'; then
+            echo "❌ Possible hardcoded credentials found!"
+            FOUND_ISSUES=1
+          fi
+
+          # Check that .env is NOT tracked
+          if git ls-files --error-unmatch .env 2>/dev/null; then
+            echo "❌ .env file is tracked by git!"
+            FOUND_ISSUES=1
+          fi
+
+          if [ "$FOUND_ISSUES" -eq 1 ]; then
+            echo ""
+            echo "🚨 Security issues detected. Please fix before merging."
+            exit 1
+          fi
+
+          echo "✅ No exposed secrets detected"
+
+      - name: 🐳 Docker Build Test
+        run: |
+          echo "🏗️ Building Docker image..."
+          docker compose build --no-cache
+          echo "✅ Docker build succeeded"
+
+      - name: 🚀 Container Smoke Test
+        run: |
+          echo "🚀 Starting container..."
+
+          # Create a minimal .env for the smoke test
+          echo "FIREBASE_API_KEY=test-key" > .env
+          echo "FIREBASE_AUTH_DOMAIN=test.firebaseapp.com" >> .env
+          echo "FIREBASE_PROJECT_ID=test-project" >> .env
+          echo "FIREBASE_STORAGE_BUCKET=test.appspot.com" >> .env
+          echo "FIREBASE_MESSAGING_SENDER_ID=000000000000" >> .env
+          echo "FIREBASE_APP_ID=1:000:web:test" >> .env
+          echo "SINGLE_USER_EMAIL=test@test.com" >> .env
+          echo "SINGLE_USER_PASSWORD=testpass123" >> .env
+          echo "GOOGLE_CLIENT_ID=test.apps.googleusercontent.com" >> .env
+          echo "CONTAINER_NAME=vtrack-ci-test" >> .env
+          echo "VTRACK_PORT=8080" >> .env
+
+          docker compose up -d
+          echo "⏳ Waiting for container to start..."
+          sleep 15
+
+          # Check if container is running
+          if ! docker compose ps --status running | grep -q vtrack; then
+            echo "❌ Container failed to start!"
+            echo "--- Container Logs ---"
+            docker compose logs
+            exit 1
+          fi
+
+          # Check HTTP response
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 2>/dev/null || echo "000")
+          echo "HTTP response code: $HTTP_CODE"
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "❌ Container is not serving the app (HTTP $HTTP_CODE)"
+            echo "--- Container Logs ---"
+            docker compose logs
+            exit 1
+          fi
+
+          echo "✅ Container is healthy and serving the app (HTTP 200)"
+
+      - name: 📏 File Size Check
+        run: |
+          echo "📏 Checking file sizes..."
+          WARNING=0
+
+          for file in app.js index.css index.html; do
+            if [ -f "$file" ]; then
+              SIZE=$(wc -c < "$file" | tr -d ' ')
+              SIZE_KB=$((SIZE / 1024))
+              echo "  $file: ${SIZE_KB}KB (${SIZE} bytes)"
+
+              # Warn if app.js exceeds 200KB (currently 142KB)
+              if [ "$file" = "app.js" ] && [ "$SIZE" -gt 200000 ]; then
+                echo "  ⚠️  app.js exceeds 200KB — consider modularizing"
+                WARNING=1
+              fi
+
+              # Warn if index.css exceeds 80KB (currently 44KB)
+              if [ "$file" = "index.css" ] && [ "$SIZE" -gt 80000 ]; then
+                echo "  ⚠️  index.css exceeds 80KB — consider splitting"
+                WARNING=1
+              fi
+            fi
+          done
+
+          if [ "$WARNING" -eq 1 ]; then
+            echo ""
+            echo "⚠️  File size warnings detected (non-blocking)"
+          else
+            echo "✅ All file sizes within acceptable limits"
+          fi
+
+      - name: 🧹 Cleanup
+        if: always()
+        run: |
+          docker compose down 2>/dev/null || true
+          rm -f .env
