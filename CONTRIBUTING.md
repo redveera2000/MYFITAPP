@@ -163,25 +163,86 @@ chore: Bump Docker image tag to 1.11.0
 
 ## Pull Request Process
 
+### PR Title Format
+
+Use the same **Conventional Commits** format as commit messages:
+
+```
+<type>: <concise description>
+```
+
+Examples: `feat: Add dark/light theme toggle`, `fix: Resolve timer save crash`, `docs: Update API reference`
+
+### Before Opening a PR
+
 1. **Update your branch** with the latest `development`:
    ```bash
    git fetch origin
    git rebase origin/development
    ```
 
-2. **Self-review your changes** — read through the diff before submitting
+2. **Self-review your changes** — read through the entire diff before submitting
 
-3. **Fill out the PR template** completely, including:
-   - Description of what changed and why
-   - Testing steps you followed
-   - Screenshots for any UI changes
+3. **Run local checks**:
+   - `docker compose build --no-cache` — Docker build must succeed
+   - `docker compose up -d` — container must start and serve the app
+   - Open browser — zero console errors
+   - Test on both desktop and mobile viewports
+   - Click through all 5 tabs to check for regressions
 
-4. **Ensure your changes work**:
-   - Build and run the Docker container successfully
-   - Test in a browser — check the relevant tabs/features
-   - No console errors
+4. **Security check** — ensure no secrets, API keys, or `.env` values are committed
 
-5. **Wait for review** — a maintainer will review your PR and may request changes
+### Submitting the PR
+
+5. **Push your branch** and open a PR targeting `development`:
+   ```bash
+   git push origin feature/your-feature-name
+   ```
+
+6. **Fill out the PR template** completely — every section matters:
+   - Link the related issue (`Fixes #42`)
+   - Check the type of change
+   - List what testing you performed
+   - Add before/after screenshots for UI changes
+   - Complete the full pre-merge checklist
+
+### Automated CI Checks
+
+Every PR automatically triggers the **PR Validation Checks** workflow which runs:
+- 🔒 **Security Scan** — detects exposed secrets and API keys
+- 🐳 **Docker Build Test** — ensures the Dockerfile builds successfully
+- 🚀 **Container Smoke Test** — verifies the app serves HTTP 200
+- 📏 **File Size Check** — monitors for unbounded file growth
+
+All checks must pass (✅) before the PR can be merged.
+
+### After Submitting
+
+7. **Wait for CI checks** to pass — fix any failures
+8. **Wait for review** — a maintainer will review your PR and may request changes
+9. **Address feedback** — push additional commits to the same branch if changes are requested
+
+### Merge Methods
+
+| Target Branch | Merge Method | Why |
+|---|---|---|
+| `development` | **Squash and Merge** | Keeps staging history clean — each PR = one commit |
+| `main` | **Create a Merge Commit** | Preserves full history for release tagging |
+
+### PR Size Guidelines
+
+Keep PRs small and focused for faster reviews:
+
+| Size | Lines Changed | Recommendation |
+|---|---|---|
+| 🟢 Small | < 100 lines | Ideal |
+| 🟡 Medium | 100–500 lines | Acceptable |
+| 🟠 Large | 500–1000 lines | Consider splitting |
+| 🔴 XL | > 1000 lines | Must split into smaller PRs |
+
+### Production Releases (`development` → `main`)
+
+For release PRs to `main`, expand the **Production Release Checklist** section in the PR template and complete all items. This includes version bumps, staging verification, full smoke test, and post-merge tagging. See [BRANCHING_STRATEGY.md](BRANCHING_STRATEGY.md#release-workflow) for the full release process.
 
 ## Code Style Guidelines
 
