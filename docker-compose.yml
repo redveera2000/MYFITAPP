@@ -5,7 +5,7 @@ services:
     container_name: ${CONTAINER_NAME:-vtrack-app}
     restart: unless-stopped
     ports:
-      - "${VTRACK_PORT:-81}:81"
+      - "${VTRACK_PORT:-81}:80"
     healthcheck:
       test: ["CMD", "wget", "-q", "-O-", "http://localhost/"]
       interval: 30s
